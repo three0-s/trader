@@ -10,39 +10,43 @@ class QuickGELU(nn.Module):
 
 
 class Dueling_DQN(nn.Module):
-    def __init__(self, in_features: int, num_actions: int, emb_dim: int, n_stocks: int, num_head: int, num_layers: int):
+    def __init__(self, in_features: int, 
+                num_actions: int, 
+                emb_dim: int, 
+                n_stocks: int, 
+                num_head: int, 
+                num_layers: int,
+                time_quantum: int):
         super(Dueling_DQN, self).__init__()
         assert emb_dim%num_head==0, "Model dimension should be multiple of 'num_head'"
         self.num_actions = num_actions
         
-        self.emb = StateEmbedding(in_features=in_features, out_features=emb_dim)
-        self.attns = nn.ModuleList([
-                        ResidualAttentionBlock(emb_dim, num_head, n_stocks) for _ in range(num_layers)
-        ])
+        self.emb = StateEmbedding(in_features=in_features, out_features=emb_dim, time_quantum=time_quantum)
+        self.attns = nn.Sequential(*[ResidualAttentionBlock(emb_dim, num_head, n_stocks) for _ in range(num_layers)])
         # L, N, B, D -> B, N, LxD
-        self.fc1_adv = nn.Linear(in_features=7*7*64, out_features=512)
-        self.fc1_val = nn.Linear(in_features=7*7*64, out_features=512)
+        self.fc1_adv = nn.Linear(in_features=time_quantum*emb_dim, out_features=emb_dim)
+        self.fc1_val = nn.Linear(in_features=time_quantum*emb_dim, out_features=emb_dim)
 
-        self.fc2_adv = nn.Linear(in_features=512, out_features=num_actions)
-        self.fc2_val = nn.Linear(in_features=512, out_features=1)
+        self.fc2_adv = nn.Linear(in_features=emb_dim, out_features=num_actions)
+        self.fc2_val = nn.Linear(in_features=emb_dim, out_features=1)
 
-        self.relu = nn.ReLU()
+        self.relu = nn.LeakyReLU()
 
-    def forward(self, x):
-        batch_size = x.size(0)
-        x = self.relu(self.conv1(x))
-        x = self.relu(self.conv2(x))
-        x = self.relu(self.conv3(x))
-        x = x.view(x.size(0), -1)
+    def forward(self, x:torch.Tensor):
+        x = self.emb(x)
+        x = self.attns(x)
+        
+        x = x.permute(2, 1, 0, 3)   # x: (L, N, B, D) -> (B, N, LxD)
+        x = x.reshape(x.shape[0], x.shape[1], -1)
 
         adv = self.relu(self.fc1_adv(x))
         val = self.relu(self.fc1_val(x))
 
         adv = self.fc2_adv(adv)
-        val = self.fc2_val(val).expand(x.size(0), self.num_actions)
+        val = self.fc2_val(val)
         
-        x = val + adv - adv.mean(1).unsqueeze(1).expand(x.size(0), self.num_actions)
-        return 
+        x = val + adv - adv.mean(-1).unsqueeze(-1)
+        return  x
     
 
 class StateEmbedding(nn.Module):
@@ -76,13 +80,13 @@ class ResidualAttentionBlock(nn.Module):
         super().__init__()
 
         self.n_stock = n_stock
-        self.attn_list = [nn.MultiheadAttention(d_model, n_head) for _ in range(n_stock)]
+        self.attn_list = nn.ModuleList([nn.MultiheadAttention(d_model, n_head) for _ in range(n_stock)])
         self.ln_1 = nn.LayerNorm(d_model)
-        self.mlp_list = [nn.Sequential(OrderedDict([
+        self.mlp_list = nn.ModuleList([nn.Sequential(OrderedDict([
                             ("c_fc", nn.Linear(d_model, d_model * 4)),
                             ("gelu", QuickGELU()),
                             ("c_proj", nn.Linear(d_model * 4, d_model))
-                        ])) for _ in range(n_stock)]
+                        ])) for _ in range(n_stock)])
         self.ln_2 = nn.LayerNorm(d_model)
         self.attn_mask = attn_mask
 
@@ -105,3 +109,13 @@ class ResidualAttentionBlock(nn.Module):
             out.append(tmp.unsqueeze(1))
         out = torch.concat(out, dim=1)
         return x
+
+
+if __name__ == "__main__":
+    from torchinfo import summary
+    B, N, L, F, D = 32, 10, 64, 17, 128
+    A = 8
+    a = torch.zeros(B, N, L, F)
+    model = Dueling_DQN(F, A, D, N, 8, 3, L)
+    # summary(model, (B, N, L, F))
+    print(model(a))
