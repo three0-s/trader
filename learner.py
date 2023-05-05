@@ -17,11 +17,6 @@ import time
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
-# CUDA variables
-USE_CUDA = torch.cuda.is_available()
-dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
-dlongtype = torch.cuda.LongTensor if torch.cuda.is_available() else torch.LongTensor
-
 # Set the logger
 logger = Logger('./logs')
 def to_np(x:torch.Tensor):
@@ -29,8 +24,13 @@ def to_np(x:torch.Tensor):
 
 def dqn_learning(env,
           env_id,
-          q_func: Dueling_DQN,
           optimizer_spec,
+          device,
+          q_func=Dueling_DQN,
+          emb_dim=256,
+          n_stocks=10,
+          num_head=8,
+          num_layers=3,
           exploration=LinearSchedule(1000000, 0.1),
           stopping_criterion=None,
           replay_buffer_size=1000000,
@@ -84,20 +84,14 @@ def dqn_learning(env,
     ###############
     # BUILD MODEL #
     ###############
-
-    if len(env.observation_space.shape) == 1:
-        # This means we are running on low-dimensional observations (e.g. RAM)
-        input_shape = env.observation_space.shape
-        in_channels = input_shape[0]
-    else:
-        img_h, img_w, img_c = env.observation_space.shape
-        input_shape = (img_h, img_w, frame_history_len * img_c)
-        in_channels = input_shape[2]
+    N, F = env.observation_space.shape
+    input_shape = (N, frame_history_len, F)
+    in_channels = input_shape[2]
     num_actions = env.action_space.n
     
     # define Q target and Q 
-    Q = q_func(in_channels, num_actions).type(dtype)
-    Q_target = q_func(in_channels, num_actions).type(dtype)
+    Q = q_func(in_channels, num_actions, emb_dim, n_stocks, num_head, num_layers, frame_history_len).to(device)
+    Q_target = q_func(in_channels, num_actions, emb_dim, n_stocks, num_head, num_layers, frame_history_len).to(device)
 
     # initialize optimizer
     optimizer = optimizer_spec.constructor(Q.parameters(), **optimizer_spec.kwargs)
@@ -105,7 +99,6 @@ def dqn_learning(env,
     # create replay buffer
     replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len)
 
-    ######
 
     ###############
     # RUN ENV     #
@@ -137,9 +130,9 @@ def dqn_learning(env,
             sample = random.random()
             threshold = exploration.value(t)
             if sample > threshold:
-                obs = torch.from_numpy(observations).unsqueeze(0).type(dtype) / 255.0
-                q_value_all_actions = Q(Variable(obs, volatile=True)).cpu()
-                action = ((q_value_all_actions).data.max(1)[1])[0]
+                obs = torch.from_numpy(observations).unsqueeze(0).to(device, torch.float32)
+                q_value_all_actions = Q(obs).cpu()
+                action = ((q_value_all_actions).max(1)[1])[0]
             else:
                 action = torch.IntTensor([[np.random.randint(num_actions)]])[0][0]
 
@@ -167,14 +160,15 @@ def dqn_learning(env,
             # sample transition batch from replay memory
             # done_mask = 1 if next state is end of episode
             obs_t, act_t, rew_t, obs_tp1, done_mask = replay_buffer.sample(batch_size)
-            obs_t = Variable(torch.from_numpy(obs_t)).type(dtype) / 255.0
-            act_t = Variable(torch.from_numpy(act_t)).type(dlongtype)
-            rew_t = Variable(torch.from_numpy(rew_t)).type(dtype)
-            obs_tp1 = Variable(torch.from_numpy(obs_tp1)).type(dtype) / 255.0
-            done_mask = Variable(torch.from_numpy(done_mask)).type(dtype)
+            obs_t = torch.from_numpy(obs_t).to(device, torch.float32)
+            act_t = torch.from_numpy(act_t).to(device, torch.int32)
+            rew_t = torch.from_numpy(rew_t).to(device, torch.float32)
+            obs_tp1 = torch.from_numpy(obs_tp1).to(device, torch.float32)
+            done_mask = torch.from_numpy(done_mask).to(device, torch.float32)
 
             # input batches to networks
             # get the Q values for current observations (Q(s,a, theta_i))
+           
             q_values = Q(obs_t)
             q_s_a = q_values.gather(1, act_t.unsqueeze(1))
             q_s_a = q_s_a.squeeze()
