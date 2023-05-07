@@ -6,6 +6,11 @@ import gym
 from gym import spaces
 from account import VirtualAccount
 from glob import glob
+from matplotlib import pyplot as plt
+import mpl_finance
+from time import time
+from collections import deque
+
 
 NOOP=0
 LONG1X=1
@@ -23,17 +28,18 @@ MAX_BALANCE = 10e9
 INIT_BALANCE = 10e5
 class CryptoMarketEnv(gym.Env): 
     metadata = {'render.modes': ['human']}
-    def __init__(self, data_dir, n_stock, SL:float, TP:float):
+    def __init__(self, data_dir, n_stock, SL:float, TP:float, render_dir):
         super(CryptoMarketEnv, self).__init__()
         self.state = None
         self.fee = 0.5/100 # 0.5% fee
         self.data_dir = data_dir
         self.n_stock = n_stock
+        
         # Stop Loss and Take Profit
         assert (SL > 0 and SL < 1 and TP > 0), "SL should be less than 1"
         self.SL = SL
         self.TP = TP
-
+        self.render_dir = render_dir
         self.game_maps = dict()
         for i in range(n_stock):
            self.game_maps[i]=glob(os.path.join(data_dir, i, ".csv"))
@@ -124,9 +130,12 @@ class CryptoMarketEnv(gym.Env):
                     (0, 0), # Short 1x 
                     (0, 0)] # Short 2x    
         map_no = random.randint(0, 13)
-        self.current_map_df = pd.read_csv(random.choice(self.game_maps[map_no]))
+        dfname = random.choice(self.game_maps[map_no])
+        self.current_map_df = pd.read_csv(dfname)
         del self.current_map_df['timestamp']
-
+        now = str(int(time()))
+        self.current_render_dir = os.path.join(self.render_dir, dfname.replace('.csv', ''), now)
+        os.makedirs(self.current_render_dir, exist_ok=True)
         self.cur=random.randint(0, len(self.current_map_df)-60)
         self.account.set_balance(INIT_BALANCE)
 
@@ -241,14 +250,61 @@ class CryptoMarketEnv(gym.Env):
                                self.CPS[3][1] + amount)
                 
         elif action_type==SELL_S1X:
-            pass
-        elif action_type==SELL_S2X:
-            pass
+            if (amount > self.CPS[2][1]):
+                reward -= amount-self.CPS[2][1]
+                amount = self.CPS[2][1]
+            # balance update & reward
+            profit = (self.CPS[2][0]-current_price) * (1) * amount * (1-self.fee)
+            total_shares = self.CPS[2][0] * amount * (1-self.fee)
+            self.account.deposit(profit+total_shares)
+            reward += profit 
 
+            # CPS state update
+            if (amount < self.CPS[2][1]):
+                self.CPS[2] = (self.CPS[2][0], self.CPS[2][1]-amount)
+            else:
+                self.CPS[2] = (0, 0)
+
+        elif action_type==SELL_S2X:
+            if (amount > self.CPS[3][1]):
+                reward -= amount-self.CPS[3][1]
+                amount = self.CPS[3][1]
+            # balance update & reward
+            profit = (self.CPS[3][0]-current_price) * (2) * amount * (1-self.fee)
+            total_shares = self.CPS[3][0]*amount * (1-self.fee)
+            self.account.deposit(profit+total_shares)
+            reward += profit 
+
+            # CPS state update
+            if (amount < self.CPS[3][1]):
+                self.CPS[3] = (self.CPS[3][0], self.CPS[3][1]-amount)
+            else:
+                self.CPS[3] = (0, 0)
 
         return reward
 
 
 
     def render(self, mode='human', close=False):
-        return self.reward_list
+        position = ['Long 1x', 'Long 2x', 'Short 1x', 'Short 2x']
+
+        st = self.cur-15 if self.cur >= 15  else 0
+        pre = self.current_map_df.iloc[st:self.cur]
+        fig = plt.figure(figsize=(6, 4))
+        ax = fig.add_subplot(1, 2, 1)
+        ax.set_ylabel("USD")
+        plt.grid()
+        ay = fig.add_subplot(1, 2, 2)
+        ay.axis('off')
+
+        prev = -1
+        for i in range(4):
+            if self.CPS[i][1] != 0:
+                ay.text(0, 0.1+(prev+1)/20, f"{position[i]}] CPS: {self.CPS[i][0]:.2f}$      {self.CPS[i][1]:d}")
+                prev += 1
+        ay.text(0, 0.7, f"Net Profit Rate: {self.get_networth()/INIT_BALANCE:.2f}%", color='g')
+        mpl_finance.candlestick2_ohlc(ax, pre['Open'], pre['High'], pre['Low'], pre['Close'], width=0.5, colorup='r', colordown='b')
+
+        plt.savefig(os.path.join(self.current_render_dir, f"{self.cur}.png"))
+        
+        
