@@ -4,12 +4,12 @@ import pandas as pd
 import random
 import gym
 from gym import spaces
-from account import VirtualAccount
+from .account import VirtualAccount
 from glob import glob
 from matplotlib import pyplot as plt
 import mpl_finance
 from time import time
-from collections import deque
+import torch
 
 
 NOOP=0
@@ -42,7 +42,7 @@ class CryptoMarketEnv(gym.Env):
         self.render_dir = render_dir
         self.game_maps = dict()
         for i in range(n_stock):
-           self.game_maps[i]=glob(os.path.join(data_dir, i, ".csv"))
+           self.game_maps[i]=glob(os.path.join(data_dir, str(i), "*.csv"))
 
         self.current_map_df = None
         self.cur = 0
@@ -50,7 +50,8 @@ class CryptoMarketEnv(gym.Env):
         self.CPS = [(0, 0), # Long 1x 
                     (0, 0), # Long 2x 
                     (0, 0), # Short 1x 
-                    (0, 0)] # Short 2x    
+                    (0, 0)] # Short 2x  
+                              
         self.action_space = spaces.Box(low=0, high=1000000, shape=(9,), dtype=np.float32)
         self.observation_space = spaces.Box(low=0, high=1000000, shape=(16,), dtype=np.float32) 
         # state vector 
@@ -134,8 +135,7 @@ class CryptoMarketEnv(gym.Env):
         self.current_map_df = pd.read_csv(dfname)
         del self.current_map_df['timestamp']
         now = str(int(time()))
-        self.current_render_dir = os.path.join(self.render_dir, dfname.replace('.csv', ''), now)
-        os.makedirs(self.current_render_dir, exist_ok=True)
+        self.current_render_dir = os.path.join(self.render_dir, str(map_no), os.path.basename(dfname).replace('.csv', ''), now)
         self.cur=random.randint(0, len(self.current_map_df)-60)
         self.account.set_balance(INIT_BALANCE)
 
@@ -146,7 +146,15 @@ class CryptoMarketEnv(gym.Env):
         obs = self.current_map_df.iloc[self.cur].to_numpy() # (7,)
         cps = []
         for t in self.CPS:
-            cps.append(*t)
+            t0, t1 = t
+            if (type(t0)==torch.Tensor):
+                t0 = t0.detach().numpy()
+            if (type(t1)==torch.Tensor):
+                t1 = t1.detach().numpy()
+            cps.append(t0)
+            cps.append(t1)
+        if type(self.account.balance)==torch.Tensor:
+            self.account.balance = self.account.balance.detach().numpy()
         acc_state = np.array([self.account.balance, *cps])  # (9,)
         out = np.concatenate([obs, acc_state])
         return out
@@ -171,8 +179,10 @@ class CryptoMarketEnv(gym.Env):
 
 
     def _isend(self):
+        if (self.cur >= len(self.current_map_df)):
+            return True
         networth = self.get_networth()
-        if (self.cur >= len(self.current_map_df) or networth <= INIT_BALANCE*(1-self.SL) or networth >= INIT_BALANCE*(1+self.TP)):
+        if (networth <= INIT_BALANCE*(1-self.SL) or networth >= INIT_BALANCE*(1+self.TP)):
             return True
         
         return False
@@ -192,8 +202,9 @@ class CryptoMarketEnv(gym.Env):
     def _take_action(self, action):
         # Set the current price to the highest price within the time step
         current_price = self.current_map_df['High'].iloc[self.cur]
-        action_type = action[0]
-        amount = action[1]
+        action_type = torch.argmax(action)
+        # amount = action[action_type]
+        amount = action[action_type]/torch.sum(action) * self.account.balance * 0.1
         tot_price = current_price*amount
         reward = 0
 
@@ -211,33 +222,34 @@ class CryptoMarketEnv(gym.Env):
                 
         elif action_type==SELL_L1X:
             if (amount > self.CPS[0][1]):
-                reward -= (amount-self.CPS[0][1])
+                reward -= 0.1
                 amount = self.CPS[0][1]
-
-            # balance update & reward
-            self.account.deposit(current_price * amount * (1-self.fee))
-            reward += (current_price-self.CPS[0][0]) * amount * (1-self.fee)
-            # CPS state update
-            if (amount < self.CPS[0][1]):
-                self.CPS[0] = (self.CPS[0][0], self.CPS[0][1]-amount)
-            else:
-                self.CPS[0] = (0, 0)
+            if amount > 0:
+                # balance update & reward
+                self.account.deposit(current_price * amount * (1-self.fee))
+                reward += (current_price-self.CPS[0][0]) / self.CPS[0][0] * (1-self.fee)
+                # CPS state update
+                if (amount < self.CPS[0][1]):
+                    self.CPS[0] = (self.CPS[0][0], self.CPS[0][1]-amount)
+                else:
+                    self.CPS[0] = (0, 0)
 
         elif action_type==SELL_L2X:
             if (amount > self.CPS[1][1]):
-                reward -= amount-self.CPS[1][1]
+                reward -= 0.1
                 amount = self.CPS[1][1]
-            # balance update & reward
-            profit = (current_price-self.CPS[1][0])*(2)*amount * (1-self.fee)
-            total_shares = self.CPS[1][0]*amount * (1-self.fee)
-            self.account.deposit(profit+total_shares)
-            reward += profit 
+            if amount > 0:
+                # balance update & reward
+                profit = (current_price-self.CPS[1][0])*(2)*amount * (1-self.fee)
+                total_shares = self.CPS[1][0]*amount * (1-self.fee)
+                self.account.deposit(profit+total_shares)
+                reward += profit / (self.CPS[1][0] * amount)
 
-            # CPS state update
-            if (amount < self.CPS[1][1]):
-                self.CPS[1] = (self.CPS[1][0], self.CPS[1][1]-amount)
-            else:
-                self.CPS[1] = (0, 0)
+                # CPS state update
+                if (amount < self.CPS[1][1]):
+                    self.CPS[1] = (self.CPS[1][0], self.CPS[1][1]-amount)
+                else:
+                    self.CPS[1] = (0, 0)
 
         elif action_type==SHORT1X:
             if self.account.withdraw(tot_price):
@@ -251,35 +263,39 @@ class CryptoMarketEnv(gym.Env):
                 
         elif action_type==SELL_S1X:
             if (amount > self.CPS[2][1]):
-                reward -= amount-self.CPS[2][1]
+                reward -= 0.1
                 amount = self.CPS[2][1]
-            # balance update & reward
-            profit = (self.CPS[2][0]-current_price) * (1) * amount * (1-self.fee)
-            total_shares = self.CPS[2][0] * amount * (1-self.fee)
-            self.account.deposit(profit+total_shares)
-            reward += profit 
+            if amount > 0:
+                # balance update & reward
+                profit = (self.CPS[2][0]-current_price) * (1) * amount * (1-self.fee)
+                total_shares = self.CPS[2][0] * amount * (1-self.fee)
+                self.account.deposit(profit+total_shares)
+                reward += profit / (self.CPS[2][0] * amount)
 
-            # CPS state update
-            if (amount < self.CPS[2][1]):
-                self.CPS[2] = (self.CPS[2][0], self.CPS[2][1]-amount)
-            else:
-                self.CPS[2] = (0, 0)
+                
+                # CPS state update
+                if (amount < self.CPS[2][1]):
+                    self.CPS[2] = (self.CPS[2][0], self.CPS[2][1]-amount)
+                else:
+                    self.CPS[2] = (0, 0)
 
         elif action_type==SELL_S2X:
             if (amount > self.CPS[3][1]):
-                reward -= amount-self.CPS[3][1]
+                reward -= 0.1
                 amount = self.CPS[3][1]
-            # balance update & reward
-            profit = (self.CPS[3][0]-current_price) * (2) * amount * (1-self.fee)
-            total_shares = self.CPS[3][0]*amount * (1-self.fee)
-            self.account.deposit(profit+total_shares)
-            reward += profit 
 
-            # CPS state update
-            if (amount < self.CPS[3][1]):
-                self.CPS[3] = (self.CPS[3][0], self.CPS[3][1]-amount)
-            else:
-                self.CPS[3] = (0, 0)
+            if amount > 0:
+                # balance update & reward
+                profit = (self.CPS[3][0]-current_price) * (2) * amount * (1-self.fee)
+                total_shares = self.CPS[3][0]*amount * (1-self.fee)
+                self.account.deposit(profit+total_shares)
+                reward += profit / (self.CPS[3][0] * amount)
+
+                # CPS state update
+                if (amount < self.CPS[3][1]):
+                    self.CPS[3] = (self.CPS[3][0], self.CPS[3][1]-amount)
+                else:
+                    self.CPS[3] = (0, 0)
 
         return reward
 
@@ -287,6 +303,10 @@ class CryptoMarketEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         position = ['Long 1x', 'Long 2x', 'Short 1x', 'Short 2x']
+        try:
+            os.makedirs(self.current_render_dir)
+        except OSError:
+            pass
 
         st = self.cur-15 if self.cur >= 15  else 0
         pre = self.current_map_df.iloc[st:self.cur]
@@ -300,11 +320,11 @@ class CryptoMarketEnv(gym.Env):
         prev = -1
         for i in range(4):
             if self.CPS[i][1] != 0:
-                ay.text(0, 0.1+(prev+1)/20, f"{position[i]}] CPS: {self.CPS[i][0]:.2f}$      {self.CPS[i][1]:d}")
+                ay.text(0, 0.1+(prev+1)/20, f"{position[i]}] CPS: {self.CPS[i][0]:.2f}$      {self.CPS[i][1]:.2f}")
                 prev += 1
-        ay.text(0, 0.7, f"Net Profit Rate: {self.get_networth()/INIT_BALANCE:.2f}%", color='g')
+        ay.text(0, 0.7, f"Net Profit Rate: {(self.get_networth()-INIT_BALANCE)*100/INIT_BALANCE:.2f}%", color='g')
         mpl_finance.candlestick2_ohlc(ax, pre['Open'], pre['High'], pre['Low'], pre['Close'], width=0.5, colorup='r', colordown='b')
 
         plt.savefig(os.path.join(self.current_render_dir, f"{self.cur}.png"))
-        
+        plt.close()
         

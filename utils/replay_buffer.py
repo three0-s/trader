@@ -18,7 +18,7 @@ def sample_n_unique(sampling_f, n):
     return res
 
 class ReplayBuffer(object):
-    def __init__(self, size, frame_history_len):
+    def __init__(self, size, frame_history_len, n_action):
         """This is a memory efficient implementation of the replay buffer.
         The sepecific memory optimizations use here are:
             - only store each frame once rather than k times
@@ -42,7 +42,7 @@ class ReplayBuffer(object):
         """
         self.size = size
         self.frame_history_len = frame_history_len
-
+        self.n_action = n_action
         self.next_idx      = 0
         self.num_in_buffer = 0
 
@@ -84,7 +84,7 @@ class ReplayBuffer(object):
             (batch_size, L, N, F)
             and dtype np.float32
         act_batch: np.array
-            Array of shape (batch_size,) and dtype np.int32
+            Array of shape (batch_size, n_actions) and dtype np.int32
         rew_batch: np.array
             Array of shape (batch_size,) and dtype np.float32
         next_obs_batch: np.array
@@ -153,16 +153,18 @@ class ReplayBuffer(object):
         """
         if len(frame.shape) == 3:
             assert frame.shape[0]==1, "First dimension of the frame should be 1 if it is 3d tensor."
-        elif (len(frame.shape==2)):
+        elif (len(frame.shape)==2):
             frame = frame[np.newaxis, ...]
+        elif len(frame.shape)==1:
+            frame = frame[np.newaxis, np.newaxis, ...]
         else:
             raise ValueError(f"Invalid frame shape! Got {frame.shape}")
         
         if self.obs is None:
             self.obs      = np.empty([self.size] + list(frame.shape), dtype=np.float32)
-            self.action   = np.empty([self.size],                     dtype=np.int32)
+            self.action   = np.empty([self.size, self.n_action],      dtype=np.float32)
             self.reward   = np.empty([self.size],                     dtype=np.float32)
-            self.done     = np.empty([self.size],                     dtype=np.bool8)
+            self.done     = np.empty([self.size],                     dtype=np.float32)
         self.obs[self.next_idx] = frame
 
         ret = self.next_idx
@@ -180,7 +182,7 @@ class ReplayBuffer(object):
         ---------
         idx: int
             Index in buffer of recently observed frame (returned by `store_frame`).
-        action: int
+        action: np.ndarray of shape (self.n_action,)
             Action that was performed upon observing this frame.
         reward: float
             Reward that was received when the actions was performed.

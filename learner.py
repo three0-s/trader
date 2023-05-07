@@ -14,6 +14,10 @@ from model import Dueling_DQN
 from utils.schedule import LinearSchedule
 from utils.logger import Logger
 import time
+# import gym
+from envs.env import CryptoMarketEnv
+from gym import spaces
+from utils.wrapper import get_wrapper_by_name
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
@@ -22,13 +26,12 @@ logger = Logger('./logs')
 def to_np(x:torch.Tensor):
     return x.cpu().numpy() 
 
-def dqn_learning(env,
-          env_id,
+def dqn_learning(env:CryptoMarketEnv,
           optimizer_spec,
           device,
           q_func=Dueling_DQN,
           emb_dim=256,
-          n_stocks=10,
+          n_stocks=1,
           num_head=8,
           num_layers=3,
           exploration=LinearSchedule(1000000, 0.1),
@@ -78,16 +81,17 @@ def dqn_learning(env,
     grad_norm_clipping: float or None
         If not None gradients' norms are clipped to this value.
     """
-    assert type(env.observation_space) == gym.spaces.Box
-    assert type(env.action_space)      == gym.spaces.Discrete
+    assert type(env.observation_space) == spaces.Box
+    assert type(env.action_space)      == spaces.Box
 
     ###############
     # BUILD MODEL #
     ###############
-    N, F = env.observation_space.shape
+    F = env.observation_space.shape[0]
+    N = 1
     input_shape = (N, frame_history_len, F)
     in_channels = input_shape[2]
-    num_actions = env.action_space.n
+    num_actions = env.action_space.shape[0]
     
     # define Q target and Q 
     Q = q_func(in_channels, num_actions, emb_dim, n_stocks, num_head, num_layers, frame_history_len).to(device)
@@ -97,7 +101,7 @@ def dqn_learning(env,
     optimizer = optimizer_spec.constructor(Q.parameters(), **optimizer_spec.kwargs)
 
     # create replay buffer
-    replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len)
+    replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len, num_actions)
 
 
     ###############
@@ -124,25 +128,26 @@ def dqn_learning(env,
 
         # before learning starts, choose actions randomly
         if t < learning_starts:
-            action = np.random.randint(num_actions)
+            action = torch.rand(env.action_space.shape).to(device, torch.float32)
         else:
             # epsilon greedy exploration
             sample = random.random()
             threshold = exploration.value(t)
             if sample > threshold:
                 obs = torch.from_numpy(observations).unsqueeze(0).to(device, torch.float32)
-                q_value_all_actions = Q(obs).cpu()
-                action = ((q_value_all_actions).max(1)[1])[0]
+                action = Q(obs).cpu().squeeze() #(9, )
+                # action = ((q_value_all_actions).max(1)[1])[0]
             else:
-                action = torch.IntTensor([[np.random.randint(num_actions)]])[0][0]
+                action = torch.rand(env.action_space.shape).to(device, torch.float32)
 
         obs, reward, done, info = env.step(action)
-
+        if type(reward) != torch.Tensor:
+            reward = torch.Tensor([reward])
         # clipping the reward, noted in nature paper
-        reward = np.clip(reward, -1.0, 1.0)
+        reward = torch.clip(reward, -10, 10)
 
         # store effect of action
-        replay_buffer.store_effect(last_stored_frame_idx, action, reward, done)
+        replay_buffer.store_effect(last_stored_frame_idx, action.detach().numpy(), reward, done)
 
         # reset env if reached episode boundary
         if done:
@@ -161,7 +166,7 @@ def dqn_learning(env,
             # done_mask = 1 if next state is end of episode
             obs_t, act_t, rew_t, obs_tp1, done_mask = replay_buffer.sample(batch_size)
             obs_t = torch.from_numpy(obs_t).to(device, torch.float32)
-            act_t = torch.from_numpy(act_t).to(device, torch.int32)
+            act_t = torch.from_numpy(act_t).to(device, torch.float32)
             rew_t = torch.from_numpy(rew_t).to(device, torch.float32)
             obs_tp1 = torch.from_numpy(obs_tp1).to(device, torch.float32)
             done_mask = torch.from_numpy(done_mask).to(device, torch.float32)
@@ -169,8 +174,8 @@ def dqn_learning(env,
             # input batches to networks
             # get the Q values for current observations (Q(s,a, theta_i))
            
-            q_values = Q(obs_t)
-            q_s_a = q_values.gather(1, act_t.unsqueeze(1))
+            q_values = Q(obs_t).squeeze() # (B, num_action)
+            q_s_a = q_values.gather(1, torch.argmax(act_t, dim=1).unsqueeze(1))
             q_s_a = q_s_a.squeeze()
 
             
@@ -182,8 +187,8 @@ def dqn_learning(env,
             # based off frozen Q network
             # max(Q(s', a', theta_i_frozen)) wrt a'
             q_tp1_values = Q_target(obs_tp1).detach()
-            q_s_a_prime, a_prime = q_tp1_values.max(1)
-
+            q_s_a_prime, a_prime  = q_tp1_values.max(dim=2)
+            q_s_a_prime = q_s_a_prime.squeeze()
             # if current state is end of episode, then there is no next Q value
             q_s_a_prime = (1 - done_mask) * q_s_a_prime 
 
@@ -196,18 +201,27 @@ def dqn_learning(env,
 
             # backwards pass
             optimizer.zero_grad()
-            q_s_a.backward(clipped_error.data.unsqueeze(1))
+            q_s_a.backward(clipped_error)
 
             # update
             optimizer.step()
             num_param_updates += 1
 
             # update target Q network weights with current Q network weights
+            
             if num_param_updates % target_update_freq == 0:
                 Q_target.load_state_dict(Q.state_dict())
 
             # (2) Log values and gradients of the parameters (histogram)
             if t % LOG_EVERY_N_STEPS == 0:
+                obs = env.reset()
+                with torch.no_grad():
+                    for i in range(240):
+                        obs = torch.from_numpy(obs).unsqueeze(0).to(device, torch.float32)
+                        action = Q(obs).cpu().squeeze() #(9, )
+                        obs, rewards, done, info = env.step(action)
+                        env.render()
+
                 for tag, value in Q.named_parameters():
                     tag = tag.replace('.', '/')
                     logger.histo_summary(tag, to_np(value), t+1)
@@ -219,7 +233,7 @@ def dqn_learning(env,
             if not os.path.exists("models"):
                 os.makedirs("models")
             add_str = 'dueling'
-            model_save_path = "models/%s_%s_%d_%s.model" %(str(env_id), add_str, t, str(time.ctime()).replace(' ', '_'))
+            model_save_path = "models/%s_%d_%s.model" %(add_str, t, str(time.ctime()).replace(' ', '_'))
             torch.save(Q.state_dict(), model_save_path)
 
         episode_rewards = get_wrapper_by_name(env, "Monitor").get_episode_rewards()

@@ -128,7 +128,7 @@ class ResidualAttentionBlock(nn.Module):
 if __name__ == "__main__":
     from torchinfo import summary
     B, N, L, F, D = 32, 1, 64, 7, 256
-    A = 8
+    A = 9
     a = torch.zeros(B, N, L, F)
     model = Dueling_DQN(F, A, D, N, 8, 3, L)
     summary(model, (B, N, L, F))
