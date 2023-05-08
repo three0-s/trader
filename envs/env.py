@@ -212,7 +212,7 @@ class CryptoMarketEnv(gym.Env):
         current_price = self.current_map_df['High'].iloc[self.cur]
         action_type = torch.argmax(action)
         # amount = action[action_type]
-        amount = action[action_type]/torch.sum(action) * self.account.balance * 0.1
+        amount = action[action_type]/torch.sum(action) * self.account.balance * 0.05
         tot_price = current_price*amount
         reward = 0
 

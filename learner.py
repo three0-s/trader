@@ -136,7 +136,8 @@ def dqn_learning(env:CryptoMarketEnv,
             threshold = exploration.value(t)
             if sample > threshold:
                 obs = torch.from_numpy(observations).unsqueeze(0).to(device, torch.float32)
-                action = Q(obs).cpu().squeeze() #(9, )
+                with torch.no_grad():
+                    action = Q(obs).cpu().squeeze() #(9, )
                 # action = ((q_value_all_actions).max(1)[1])[0]
             else:
                 action = torch.rand(env.action_space.shape).to(torch.float32).detach().cpu()
@@ -145,7 +146,7 @@ def dqn_learning(env:CryptoMarketEnv,
         if type(reward) != torch.Tensor:
             reward = torch.Tensor([reward])
         # clipping the reward, noted in nature paper
-        reward = torch.clip(reward, -10, 10)
+        reward = torch.clip(reward, -10, 10).detach().cpu()
 
         # store effect of action
         replay_buffer.store_effect(last_stored_frame_idx, action.detach().cpu().numpy(), reward, done)
@@ -187,7 +188,8 @@ def dqn_learning(env:CryptoMarketEnv,
             # get the Q values for best actions in obs_tp1 
             # based off frozen Q network
             # max(Q(s', a', theta_i_frozen)) wrt a'
-            q_tp1_values = Q_target(obs_tp1).detach()
+            with torch.no_grad():
+                q_tp1_values = Q_target(obs_tp1).detach()
             q_s_a_prime, a_prime  = q_tp1_values.max(dim=2)
             q_s_a_prime = q_s_a_prime.squeeze()
             # if current state is end of episode, then there is no next Q value
@@ -215,34 +217,6 @@ def dqn_learning(env:CryptoMarketEnv,
 
             # (2) Log values and gradients of the parameters (histogram)
             if t % LOG_EVERY_N_STEPS == 0:
-                # obs = env.reset()
-                # obs_concat = deque(maxlen=frame_history_len)
-                # episode_rewards = []
-                # i = 0
-                # dorender = t % LOG_EVERY_N_STEPS == 0
-                # with torch.no_grad():
-                #     while True:
-                #         i+=1
-                #         if type(obs)!=torch.Tensor:
-                #             obs = torch.from_numpy(obs)
-                #         obs = obs.unsqueeze(0).unsqueeze(0).unsqueeze(0).to(device, torch.float32)
-                #         obs_concat.append(obs)
-                #         if i <= frame_history_len:
-                #             action = torch.zeros(num_actions,).cpu().squeeze()
-                #             action[0]=1.0 #do nothing
-                #         else:
-                #             s = torch.cat(list(obs_concat), dim=2).to(device)
-                #             action = Q(s).cpu().squeeze() #(16, )
-                        
-                #         obs, rewards, done, info = env.step(action)
-                #         if type(rewards) == torch.Tensor:
-                #             rewards = rewards.detach().cpu().numpy()
-                #         episode_rewards.append(rewards)
-                #         if (done):
-                #             break
-                #         if dorender:
-                #             env.render()
-        
                 for tag, value in Q.named_parameters():
                     tag = tag.replace('.', '/')
                     logger.histo_summary(tag, to_np(value), t+1)
