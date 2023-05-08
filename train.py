@@ -20,16 +20,12 @@ ALPHA = 0.95
 EPS = 0.01
 EXPLORATION_SCHEDULE = LinearSchedule(1000000, 0.1)
 LEARNING_STARTS = 50000
-DATA_DIR = "/Users/yewon/Documents/traderWon/envs/data"
-RENDER_DIR = "/Users/yewon/Documents/traderWon/envs/test_render"
+DATA_DIR = "/mnt/won/data"
+RENDER_DIR = "/mnt/won/render"
 STEPS = 10e8
 
 
 def train(env, num_timesteps):
-    def stopping_criterion(env, t):
-        # notice that here t is the number of steps of the wrapped env,
-        # which is different from the number of steps in the underlying env
-        return get_wrapper_by_name(env, "Monitor").get_total_steps() >= num_timesteps
     
     optimizer = OptimizerSpec(
         constructor=optim.RMSprop,
@@ -47,7 +43,7 @@ def train(env, num_timesteps):
         num_layers=3,
 
         exploration=EXPLORATION_SCHEDULE,
-        stopping_criterion=stopping_criterion,
+        stopping_criterion=num_timesteps,
         replay_buffer_size=REPLAY_BUFFER_SIZE,
         batch_size=BATCH_SIZE,
         gamma=GAMMA,

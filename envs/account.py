@@ -6,7 +6,7 @@ class VirtualAccount:
 
     def withdraw(self, money):
         if type(money) == torch.Tensor:
-            money = money.detach().numpy()
+            money = money.detach().cpu().numpy()
         if self.balance < money:
             return False
         else:
@@ -15,7 +15,7 @@ class VirtualAccount:
 
     def deposit(self, money):
         if type(money) == torch.Tensor:
-            money = money.detach().numpy()
+            money = money.detach().cpu().numpy()
         self.balance += money
         return True
 
@@ -24,5 +24,5 @@ class VirtualAccount:
 
     def set_balance(self, new_balance):
         if type(new_balance) == torch.Tensor:
-            new_balance = new_balance.detach().numpy()
+            new_balance = new_balance.detach().cpu().numpy()
         self.balance = new_balance

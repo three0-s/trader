@@ -148,13 +148,13 @@ class CryptoMarketEnv(gym.Env):
         for t in self.CPS:
             t0, t1 = t
             if (type(t0)==torch.Tensor):
-                t0 = t0.detach().numpy()
+                t0 = t0.detach().cpu().numpy()
             if (type(t1)==torch.Tensor):
-                t1 = t1.detach().numpy()
+                t1 = t1.detach().cpu().numpy()
             cps.append(t0)
             cps.append(t1)
         if type(self.account.balance)==torch.Tensor:
-            self.account.balance = self.account.balance.detach().numpy()
+            self.account.balance = self.account.balance.detach().cpu().numpy()
         acc_state = np.array([self.account.balance, *cps])  # (9,)
         out = np.concatenate([obs, acc_state])
         return out
@@ -165,7 +165,15 @@ class CryptoMarketEnv(gym.Env):
         profit=0
         # Long
         for i in range(2):
-            profit += (current_price-self.CPS[i][0])*(i+1)*self.CPS[i][1]
+            if type(self.CPS[i][0])==torch.Tensor:
+                cps = self.CPS[i][0].detach().cpu()
+            else:
+                cps = self.CPS[i][0]
+            if type(self.CPS[i][1])==torch.Tensor:
+                share = self.CPS[i][1].detach().cpu()
+            else:
+                share = self.CPS[i][1]
+            profit += (current_price-cps)*(i+1)*share
 
         # Short
         for i in range(2):

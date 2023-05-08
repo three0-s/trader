@@ -17,6 +17,7 @@ import time
 # import gym
 from envs.env import CryptoMarketEnv
 from gym import spaces
+from collections import deque
 from utils.wrapper import get_wrapper_by_name
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
@@ -24,7 +25,7 @@ OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 # Set the logger
 logger = Logger('./logs')
 def to_np(x:torch.Tensor):
-    return x.cpu().numpy() 
+    return x.detach().cpu().numpy() 
 
 def dqn_learning(env:CryptoMarketEnv,
           optimizer_spec,
@@ -116,7 +117,7 @@ def dqn_learning(env:CryptoMarketEnv,
 
     for t in itertools.count():
         ### 1. Check stopping criterion
-        if stopping_criterion is not None and stopping_criterion(env, t):
+        if stopping_criterion < t:
             break
 
         ### 2. Step the env and store the transition
@@ -128,7 +129,7 @@ def dqn_learning(env:CryptoMarketEnv,
 
         # before learning starts, choose actions randomly
         if t < learning_starts:
-            action = torch.rand(env.action_space.shape).to(device, torch.float32)
+            action = torch.rand(env.action_space.shape).to(torch.float32).detach().cpu()
         else:
             # epsilon greedy exploration
             sample = random.random()
@@ -138,7 +139,7 @@ def dqn_learning(env:CryptoMarketEnv,
                 action = Q(obs).cpu().squeeze() #(9, )
                 # action = ((q_value_all_actions).max(1)[1])[0]
             else:
-                action = torch.rand(env.action_space.shape).to(device, torch.float32)
+                action = torch.rand(env.action_space.shape).to(torch.float32).detach().cpu()
 
         obs, reward, done, info = env.step(action)
         if type(reward) != torch.Tensor:
@@ -147,7 +148,7 @@ def dqn_learning(env:CryptoMarketEnv,
         reward = torch.clip(reward, -10, 10)
 
         # store effect of action
-        replay_buffer.store_effect(last_stored_frame_idx, action.detach().numpy(), reward, done)
+        replay_buffer.store_effect(last_stored_frame_idx, action.detach().cpu().numpy(), reward, done)
 
         # reset env if reached episode boundary
         if done:
@@ -214,14 +215,34 @@ def dqn_learning(env:CryptoMarketEnv,
 
             # (2) Log values and gradients of the parameters (histogram)
             if t % LOG_EVERY_N_STEPS == 0:
-                obs = env.reset()
-                with torch.no_grad():
-                    for i in range(240):
-                        obs = torch.from_numpy(obs).unsqueeze(0).to(device, torch.float32)
-                        action = Q(obs).cpu().squeeze() #(9, )
-                        obs, rewards, done, info = env.step(action)
-                        env.render()
-
+                # obs = env.reset()
+                # obs_concat = deque(maxlen=frame_history_len)
+                # episode_rewards = []
+                # i = 0
+                # dorender = t % LOG_EVERY_N_STEPS == 0
+                # with torch.no_grad():
+                #     while True:
+                #         i+=1
+                #         if type(obs)!=torch.Tensor:
+                #             obs = torch.from_numpy(obs)
+                #         obs = obs.unsqueeze(0).unsqueeze(0).unsqueeze(0).to(device, torch.float32)
+                #         obs_concat.append(obs)
+                #         if i <= frame_history_len:
+                #             action = torch.zeros(num_actions,).cpu().squeeze()
+                #             action[0]=1.0 #do nothing
+                #         else:
+                #             s = torch.cat(list(obs_concat), dim=2).to(device)
+                #             action = Q(s).cpu().squeeze() #(16, )
+                        
+                #         obs, rewards, done, info = env.step(action)
+                #         if type(rewards) == torch.Tensor:
+                #             rewards = rewards.detach().cpu().numpy()
+                #         episode_rewards.append(rewards)
+                #         if (done):
+                #             break
+                #         if dorender:
+                #             env.render()
+        
                 for tag, value in Q.named_parameters():
                     tag = tag.replace('.', '/')
                     logger.histo_summary(tag, to_np(value), t+1)
@@ -235,7 +256,35 @@ def dqn_learning(env:CryptoMarketEnv,
             add_str = 'dueling'
             model_save_path = "models/%s_%d_%s.model" %(add_str, t, str(time.ctime()).replace(' ', '_'))
             torch.save(Q.state_dict(), model_save_path)
-
+ 
+        # obs = env.reset()
+        # obs_concat = deque(maxlen=frame_history_len)
+        # episode_rewards = []
+        # i = 0
+        # dorender = t % LOG_EVERY_N_STEPS == 0
+        # with torch.no_grad():
+        #     while True:
+        #         i+=1
+        #         if type(obs)!=torch.Tensor:
+        #             obs = torch.from_numpy(obs)
+        #         obs = obs.unsqueeze(0).unsqueeze(0).unsqueeze(0).to(device, torch.float32)
+        #         obs_concat.append(obs)
+        #         if i <= frame_history_len:
+        #             action = torch.zeros(num_actions,).cpu().squeeze()
+        #             action[0]=1.0 #do nothing
+        #         else:
+        #             s = torch.cat(list(obs_concat), dim=2).to(device)
+        #             action = Q(s).cpu().squeeze() #(16, )
+                
+        #         obs, rewards, done, info = env.step(action)
+        #         if type(rewards) == torch.Tensor:
+        #             rewards = rewards.detach().cpu().numpy()
+        #         episode_rewards.append(rewards)
+        #         if (done):
+        #             break
+        #         if dorender:
+        #             env.render()
+        
         episode_rewards = get_wrapper_by_name(env, "Monitor").get_episode_rewards()
         if len(episode_rewards) > 0:
             mean_episode_reward = np.mean(episode_rewards[-100:])
