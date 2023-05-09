@@ -234,33 +234,6 @@ def dqn_learning(env:CryptoMarketEnv,
             model_save_path = "models/%s_%d_%s.model" %(add_str, t, str(time.ctime()).replace(' ', '_'))
             torch.save(Q.state_dict(), model_save_path)
  
-        # obs = env.reset()
-        # obs_concat = deque(maxlen=frame_history_len)
-        # episode_rewards = []
-        # i = 0
-        # dorender = t % LOG_EVERY_N_STEPS == 0
-        # with torch.no_grad():
-        #     while True:
-        #         i+=1
-        #         if type(obs)!=torch.Tensor:
-        #             obs = torch.from_numpy(obs)
-        #         obs = obs.unsqueeze(0).unsqueeze(0).unsqueeze(0).to(device, torch.float32)
-        #         obs_concat.append(obs)
-        #         if i <= frame_history_len:
-        #             action = torch.zeros(num_actions,).cpu().squeeze()
-        #             action[0]=1.0 #do nothing
-        #         else:
-        #             s = torch.cat(list(obs_concat), dim=2).to(device)
-        #             action = Q(s).cpu().squeeze() #(16, )
-                
-        #         obs, rewards, done, info = env.step(action)
-        #         if type(rewards) == torch.Tensor:
-        #             rewards = rewards.detach().cpu().numpy()
-        #         episode_rewards.append(rewards)
-        #         if (done):
-        #             break
-        #         if dorender:
-        #             env.render()
         
         episode_rewards = get_wrapper_by_name(env, "Monitor").get_episode_rewards()
         if len(episode_rewards) > 0:

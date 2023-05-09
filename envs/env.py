@@ -75,7 +75,7 @@ class CryptoMarketEnv(gym.Env):
 
         now = str(int(time()))
         self.current_render_dir = os.path.join(self.render_dir, str(map_no), os.path.basename(dfname).replace('.csv', ''), now)
-        self.cur=random.randint(0, len(self.current_map_df)-60)
+        self.cur=random.randint(0, len(self.current_map_df)//2)
         self.account.set_balance(INIT_BALANCE)
 
         return self._next_observation()
@@ -126,7 +126,7 @@ class CryptoMarketEnv(gym.Env):
 
 
     def _isend(self):
-        if (self.cur >= len(self.current_map_df)):
+        if (self.cur >= len(self.current_map_df)-1):
             return True
         networth = self.get_networth()
         if (networth <= INIT_BALANCE*(1-self.SL) or networth >= INIT_BALANCE*(1+self.TP)):
@@ -138,19 +138,58 @@ class CryptoMarketEnv(gym.Env):
     def step(self, action):
         # Execute one time step within the environment
         reward = self._take_action(action)
-        self.cur+=1
         done = self._isend()
         if done:
+            # SELL ALL HOLDING SHARES
+            self.cur = len(self.current_map_df)-1 # time travel
+            action = torch.zeros(self.action_space.shape)
+            action[SELL_L1X]=1
+            r = self._take_action(action)
+            r=0 if r < 0 else r
+            reward+=r
+
+            action = torch.zeros(self.action_space.shape)
+            action[SELL_L2X]=1
+            r = self._take_action(action)
+            r=0 if r < 0 else r
+            reward+=r
+
+            action = torch.zeros(self.action_space.shape)
+            action[SELL_S1X]=1
+            r = self._take_action(action)
+            r=0 if r < 0 else r
+            reward+=r
+
+            action = torch.zeros(self.action_space.shape)
+            action[SELL_S2X]=1
+            r = self._take_action(action)
+            r=0 if r < 0 else r
+            reward+=r
+
             self.cur=0
+        
+        self.cur+=1
         obs = self._next_observation()
         return obs, reward, done, {}
     
 
     def _take_action(self, action):
-        # Set the current price to the highest price within the time step
-        current_price = self.current_map_df['High'].iloc[self.cur]
         action_type = torch.argmax(action)
 
+        if action_type == LONG1X or action_type == LONG2X:
+            # Set the current price to the highest price within the time step
+            current_price = self.current_map_df['High'].iloc[self.cur]
+        elif action_type == SELL_L1X or action_type == SELL_L2X:
+            # Set the current price to the lowest price within the time step
+            current_price = self.current_map_df['Low'].iloc[self.cur]
+        if action_type == SHORT1X or action_type == SHORT2X:
+            # Set the current price to the lowest price within the time step
+            current_price = self.current_map_df['Low'].iloc[self.cur]
+        elif action_type == SELL_S1X or action_type == SELL_S2X:
+            # Set the current price to the highest price within the time step
+            current_price = self.current_map_df['High'].iloc[self.cur]
+        else:
+            current_price = 1
         # assert all the elements be semi-positive
         action -= torch.min(action)
         # amount = action[action_type]
