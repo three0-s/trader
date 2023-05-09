@@ -5,25 +5,28 @@ from envs.env import CryptoMarketEnv
 from utils.wrapper import get_wrapper_by_name, get_env
 import torch.optim as optim
 import torch
-
+from torchinfo import summary
 
 # Global Variables
 # Extended data table 1 of nature paper
-BATCH_SIZE = 32
-REPLAY_BUFFER_SIZE = 1000000
-FRAME_HISTORY_LEN = 64
+BATCH_SIZE = 128
+REPLAY_BUFFER_SIZE = 10000000
+FRAME_HISTORY_LEN = 16
 TARGET_UPDATE_FREQ = 10000
 GAMMA = 0.99
 LEARNING_FREQ = 4
-LEARNING_RATE = 0.00025
+LEARNING_RATE = 1e-4
 ALPHA = 0.95
 EPS = 0.01
-EXPLORATION_SCHEDULE = LinearSchedule(1000000, 0.1)
-LEARNING_STARTS = 50000
+EXPLORATION_SCHEDULE = LinearSchedule(2000000, 0.1)
+LEARNING_STARTS = 100000
 DATA_DIR = "/mnt/won/data"
 RENDER_DIR = "/mnt/won/render"
 STEPS = 10e8
-
+EMB_DIM=512
+N_STOCK=1
+NUM_HEADS=16
+NUM_LAYERS=6
 
 def train(env, num_timesteps):
     
@@ -32,15 +35,16 @@ def train(env, num_timesteps):
         kwargs=dict(lr=LEARNING_RATE, alpha=ALPHA, eps=EPS)
     )
     device = 'cpu' if not torch.cuda.is_available() else 'cuda'
+
     dqn_learning(
         env=env,
         optimizer_spec=optimizer,
         device=device,
         q_func=Dueling_DQN,
-        emb_dim=256,
-        n_stocks=1,
-        num_head=8,
-        num_layers=3,
+        emb_dim=EMB_DIM,
+        n_stocks=N_STOCK,
+        num_head=NUM_HEADS,
+        num_layers=NUM_LAYERS,
 
         exploration=EXPLORATION_SCHEDULE,
         stopping_criterion=num_timesteps,
@@ -65,4 +69,10 @@ if __name__ == "__main__":
     print("="*40)
     print("Train Start! ...".center(40))
     print("="*40)
+    B, N, L, F, D = BATCH_SIZE, 1, FRAME_HISTORY_LEN, 16, EMB_DIM
+
+    A = 9
+    a = torch.zeros(B, N, L, F)
+    model = Dueling_DQN(F, A, D, N, 8, NUM_LAYERS, L)
+    summary(model, (B, N, L, F))
     train(env, STEPS)

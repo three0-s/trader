@@ -25,7 +25,7 @@ class Dueling_DQN(nn.Module):
         self.N = n_stocks
         self.D = emb_dim
 
-        self.emb = StateEmbedding(in_features=in_features, out_features=emb_dim, time_quantum=time_quantum)
+        self.emb = StateEmbedding(in_features=in_features, out_features=emb_dim, time_quantum=time_quantum, n_stock=n_stocks)
         self.attns = nn.Sequential(*[ResidualAttentionBlock(emb_dim, num_head, n_stocks) for _ in range(num_layers)])
         # L, NxB, D -> L, N, B, D -> B, N, LxD
         self.fc1_adv = nn.Linear(in_features=time_quantum*emb_dim, out_features=emb_dim)
@@ -53,13 +53,52 @@ class Dueling_DQN(nn.Module):
         return  x
     
 
+class SinusoidalPosEmb(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x: torch.Tensor):
+        device = x.device
+        half_dim = self.dim // 2
+        emb = torch.log(10000) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
+        emb = x[:, None] * emb[None, :]
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        return emb
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len):
+        super(PositionalEncoding, self).__init__() # nn.Module 초기화
+        
+        self.encoding = torch.zeros(max_len, d_model)
+        self.encoding.requires_grad = False
+    
+        pos = torch.arange(0, max_len)
+        pos = pos.float().unsqueeze(dim=1) 
+        _2i = torch.arange(0, d_model, step=2,).float()
+        # (max_len, 1) / (d_model/2 ) -> (max_len, d_model/2)
+        self.encoding[:, ::2] = torch.sin(pos / (10000 ** (_2i / d_model)))
+        self.encoding[:, 1::2] = torch.cos(pos / (10000 ** (_2i / d_model)))
+        
+        
+    def forward(self, x):
+        '''x: torch.Tensor (B, N, L, F)'''
+        B, N, L, F= x.size() 
+        return self.encoding[:L, :].to(x)
+
+
 class StateEmbedding(nn.Module):
-    def __init__(self, in_features, out_features, time_quantum):
+    def __init__(self, in_features, out_features, time_quantum, n_stock):
         super(StateEmbedding, self).__init__()
 
         self.L = time_quantum
         self.D = out_features
-        self.norm = nn.LayerNorm([time_quantum, in_features])
+        self.N = n_stock
+        self.norm = nn.BatchNorm2d(self.N)
+        self.pos = PositionalEncoding(in_features, self.L)
+        # self.norm = nn.LayerNorm([time_quantum, in_features])
         self.layer = nn.Linear(in_features=in_features, out_features=out_features, bias=True)
         self.relu = nn.LeakyReLU()
 
@@ -74,6 +113,7 @@ class StateEmbedding(nn.Module):
                 out: torch.Tensor (L, NxB, D)
         '''
         out = self.norm(x)
+        out = out + self.pos(out)
         out = self.relu(self.layer(out))
         out = out.permute(2, 1, 0, 3).reshape((self.L, -1, self.D))
         return out
@@ -127,9 +167,9 @@ class ResidualAttentionBlock(nn.Module):
 
 if __name__ == "__main__":
     from torchinfo import summary
-    B, N, L, F, D = 32, 1, 64, 7, 256
+    B, N, L, F, D = 32, 1, 128, 16, 256
     A = 9
     a = torch.zeros(B, N, L, F)
-    model = Dueling_DQN(F, A, D, N, 8, 3, L)
+    model = Dueling_DQN(F, A, D, N, 8, 6, L)
     summary(model, (B, N, L, F))
     # print(model(a))

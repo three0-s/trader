@@ -58,72 +58,10 @@ class CryptoMarketEnv(gym.Env):
         #         s_t = [Count Open High Low Close Vol VWAP Balance C_L1 S_L1 C_L2 S_L2 C_S1 S_S1 C_S2 S_S2]
         self.reward_range = (-MAX_BALANCE, MAX_BALANCE) 
         self.account = VirtualAccount(INIT_BALANCE)
-        
-    '''
-    def seed(self, seed=None):
-        pass
-
-    def step(self, action):
-        assert self.action_space.contains(action)
-        self.state = self.next(self.df)  # (price_percentage, volume_percentage, price, finished)
-        
-        reward = 0
-        observation = np.array([[self.state[0], self.state[1]]]).reshape((1, 2, 1))
-        
-        finished = self.state[3]
-        info = {}
-        info["price"] = self.state[2]
-
-        if finished and (info["price"] != 0):
-          if self.purchased:
-            reward = ((info["price"] * self.commision / (self.purchased_price + eps)) - 1) * 1000
-            self.purchased = False
-          print(self.buy_num)
-
-          return observation, reward, finished, info 
-
-        if (action == ACTION_BUY) and (not self.purchased):
-          if (self.account.withdraw(info["price"])):
-            self.purchased = True
-            self.buy_num += 1
-            self.purchased_price = info["price"]
-
-        elif (action == ACTION_SELL) and self.purchased:
-          if self.account.deposit(info["price"]):
-            self.purchased = False
-            reward = ((info["price"] * self.commision/ (self.purchased_price + eps)) - 1) * 1000 #reward corresponds to the revenue ratio
-            self.reward_list.append(reward)
-
-        return observation, reward, finished, info 
-
-
-    def get_data(self, train=True):
-      if train:
-        data = random.choice(self.companies)
-        return pd.read_csv(data)
-        
-      else:
-        pass
-
-
-    def next(self, df):
-      finished = False
-      if self.index == (len(df) - 1):
-        finished = True
-      
-      elif self.index > (len(df) - 1):
-        finished = True
-        return (0, 0, 0, finished)
-      
-      price_percentage = (1 - df.iloc[self.index]["체결가"] / df.iloc[0]["체결가"]) * 100
-      volume_percentage = (1 - df.iloc[self.index]["거래량"] / df.iloc[0]["거래량"]) * 100
-      price = df.iloc[self.index]["체결가"]
-
-      self.index += 1
-
-      return (price_percentage, volume_percentage, price, finished)
-    '''
-
+    
+    def get_net_profit_rate(self):
+        net_worth = self.get_networth()
+        return (net_worth-INIT_BALANCE) / INIT_BALANCE
 
     def reset(self):
         self.CPS = [(0, 0), # Long 1x 
@@ -134,6 +72,7 @@ class CryptoMarketEnv(gym.Env):
         dfname = random.choice(self.game_maps[map_no])
         self.current_map_df = pd.read_csv(dfname)
         del self.current_map_df['timestamp']
+
         now = str(int(time()))
         self.current_render_dir = os.path.join(self.render_dir, str(map_no), os.path.basename(dfname).replace('.csv', ''), now)
         self.cur=random.randint(0, len(self.current_map_df)-60)
@@ -211,11 +150,15 @@ class CryptoMarketEnv(gym.Env):
         # Set the current price to the highest price within the time step
         current_price = self.current_map_df['High'].iloc[self.cur]
         action_type = torch.argmax(action)
-        # amount = action[action_type]
-        amount = action[action_type]/torch.sum(action) * self.account.balance * 0.05
-        tot_price = current_price*amount
-        reward = 0
 
+        # assert all the elements be semi-positive
+        action -= torch.min(action)
+        # amount = action[action_type]
+        tot_price = action[action_type]/(torch.sum(action)+ eps) * self.account.balance * 0.05 
+        amount = tot_price/current_price
+        assert amount > 0, "Trading units must be positive"
+        # reward = self.get_net_profit_rate()
+        reward = 0
         if action_type==NOOP:
             pass
         elif action_type==LONG1X:
@@ -230,66 +173,74 @@ class CryptoMarketEnv(gym.Env):
                 
         elif action_type==SELL_L1X:
             if (amount > self.CPS[0][1]):
-                reward -= 0.1
                 amount = self.CPS[0][1]
             if amount > 0:
                 # balance update & reward
                 self.account.deposit(current_price * amount * (1-self.fee))
-                reward += (current_price-self.CPS[0][0]) / self.CPS[0][0] * (1-self.fee)
+                # reward += (current_price-self.CPS[0][0]) / self.CPS[0][0] * (1-self.fee)
+                reward += self.get_net_profit_rate()
                 # CPS state update
                 if (amount < self.CPS[0][1]):
                     self.CPS[0] = (self.CPS[0][0], self.CPS[0][1]-amount)
                 else:
                     self.CPS[0] = (0, 0)
+            else:
+                reward -= 0.01/100
+
 
         elif action_type==SELL_L2X:
             if (amount > self.CPS[1][1]):
-                reward -= 0.1
                 amount = self.CPS[1][1]
+
             if amount > 0:
                 # balance update & reward
                 profit = (current_price-self.CPS[1][0])*(2)*amount * (1-self.fee)
                 total_shares = self.CPS[1][0]*amount * (1-self.fee)
                 self.account.deposit(profit+total_shares)
                 reward += profit / (self.CPS[1][0] * amount)
-
+                # reward += self.get_net_profit_rate()
                 # CPS state update
                 if (amount < self.CPS[1][1]):
                     self.CPS[1] = (self.CPS[1][0], self.CPS[1][1]-amount)
                 else:
                     self.CPS[1] = (0, 0)
+            else:
+                reward -= 0.01/100
+
 
         elif action_type==SHORT1X:
             if self.account.withdraw(tot_price):
-                self.CPS[2] = ((self.CPS[2][0]*self.CPS[2][1] + tot_price)/(self.CPS[2][1] + amount),
+                self.CPS[2] = ((self.CPS[2][0]*self.CPS[2][1] + tot_price)/(self.CPS[2][1] + amount + eps),
                                self.CPS[2][1] + amount)
                 
         elif action_type==SHORT2X:
             if self.account.withdraw(tot_price):
-                self.CPS[3] = ((self.CPS[3][0]*self.CPS[3][1] + tot_price)/(self.CPS[3][1] + amount),
+                self.CPS[3] = ((self.CPS[3][0]*self.CPS[3][1] + tot_price)/(self.CPS[3][1] + amount+ eps),
                                self.CPS[3][1] + amount)
                 
         elif action_type==SELL_S1X:
             if (amount > self.CPS[2][1]):
-                reward -= 0.1
                 amount = self.CPS[2][1]
+
             if amount > 0:
                 # balance update & reward
                 profit = (self.CPS[2][0]-current_price) * (1) * amount * (1-self.fee)
                 total_shares = self.CPS[2][0] * amount * (1-self.fee)
                 self.account.deposit(profit+total_shares)
-                reward += profit / (self.CPS[2][0] * amount)
-
+                reward += profit / (self.CPS[2][0] * amount+ eps)
+                # reward = self.get_net_profit_rate()
                 
                 # CPS state update
                 if (amount < self.CPS[2][1]):
                     self.CPS[2] = (self.CPS[2][0], self.CPS[2][1]-amount)
                 else:
                     self.CPS[2] = (0, 0)
+            else:
+                reward -= 0.01/100
+
 
         elif action_type==SELL_S2X:
             if (amount > self.CPS[3][1]):
-                reward -= 0.1
                 amount = self.CPS[3][1]
 
             if amount > 0:
@@ -297,13 +248,15 @@ class CryptoMarketEnv(gym.Env):
                 profit = (self.CPS[3][0]-current_price) * (2) * amount * (1-self.fee)
                 total_shares = self.CPS[3][0]*amount * (1-self.fee)
                 self.account.deposit(profit+total_shares)
-                reward += profit / (self.CPS[3][0] * amount)
-
+                reward += profit / (self.CPS[3][0] * amount+ eps)
+                # reward += self.get_net_profit_rate()
                 # CPS state update
                 if (amount < self.CPS[3][1]):
                     self.CPS[3] = (self.CPS[3][0], self.CPS[3][1]-amount)
                 else:
                     self.CPS[3] = (0, 0)
+            else:
+                reward -= 0.01/100
 
         return reward
 
@@ -330,7 +283,9 @@ class CryptoMarketEnv(gym.Env):
             if self.CPS[i][1] != 0:
                 ay.text(0, 0.1+(prev+1)/20, f"{position[i]}] CPS: {self.CPS[i][0]:.2f}$      {self.CPS[i][1]:.2f}")
                 prev += 1
-        ay.text(0, 0.7, f"Net Profit Rate: {(self.get_networth()-INIT_BALANCE)*100/INIT_BALANCE:.2f}%", color='g')
+        profit_rate = self.get_net_profit_rate()*100
+        color = 'g' if profit_rate >0 else 'r'
+        ay.text(0, 0.7, f"Net Profit Rate: {profit_rate:.2f}%", color=color)
         mpl_finance.candlestick2_ohlc(ax, pre['Open'], pre['High'], pre['Low'], pre['Close'], width=0.5, colorup='r', colordown='b')
 
         plt.savefig(os.path.join(self.current_render_dir, f"{self.cur}.png"))

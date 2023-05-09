@@ -215,12 +215,15 @@ def dqn_learning(env:CryptoMarketEnv,
             if num_param_updates % target_update_freq == 0:
                 Q_target.load_state_dict(Q.state_dict())
 
-            # (2) Log values and gradients of the parameters (histogram)
+            # # (2) Log values and gradients of the parameters (histogram)
             if t % LOG_EVERY_N_STEPS == 0:
                 for tag, value in Q.named_parameters():
                     tag = tag.replace('.', '/')
-                    logger.histo_summary(tag, to_np(value), t+1)
-                    logger.histo_summary(tag+'/grad', to_np(value.grad), t+1)
+                    try:
+                        logger.histo_summary(tag, to_np(value), t+1)
+                        logger.histo_summary(tag+'/grad', to_np(value.grad), t+1)
+                    except:
+                        continue
             #####
 
         ### 4. Log progress
