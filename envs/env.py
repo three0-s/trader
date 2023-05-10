@@ -126,7 +126,7 @@ class CryptoMarketEnv(gym.Env):
 
 
     def _isend(self):
-        if (self.cur >= len(self.current_map_df)-1):
+        if (self.cur >= len(self.current_map_df)-2):
             return True
         networth = self.get_networth()
         if (networth <= INIT_BALANCE*(1-self.SL) or networth >= INIT_BALANCE*(1+self.TP)):
@@ -139,35 +139,34 @@ class CryptoMarketEnv(gym.Env):
         # Execute one time step within the environment
         reward = self._take_action(action)
         done = self._isend()
+        # before_done = (self.cur >= len(self.current_map_df)-2)
         if done:
             # SELL ALL HOLDING SHARES
-            self.cur = len(self.current_map_df)-1 # time travel
+            # self.cur = len(self.current_map_df)-2 # time travel
             action = torch.zeros(self.action_space.shape)
-            action[SELL_L1X]=1
+            action[SELL_L1X]=1e8
             r = self._take_action(action)
             r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
-            action[SELL_L2X]=1
+            action[SELL_L2X]=1e8
             r = self._take_action(action)
             r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
-            action[SELL_S1X]=1
+            action[SELL_S1X]=1e8
             r = self._take_action(action)
             r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
-            action[SELL_S2X]=1
+            action[SELL_S2X]=1e8
             r = self._take_action(action)
             r=0 if r < 0 else r
             reward+=r
 
-            self.cur=0
-        
         self.cur+=1
         obs = self._next_observation()
         return obs, reward, done, {}
@@ -188,10 +187,11 @@ class CryptoMarketEnv(gym.Env):
         elif action_type == SELL_S1X or action_type == SELL_S2X:
             # Set the current price to the highest price within the time step
             current_price = self.current_map_df['High'].iloc[self.cur]
-        else:
+        elif action_type == NOOP:
             current_price = 1
         # assert all the elements be semi-positive
         action -= torch.min(action)
+        action = torch.abs(action)
         # amount = action[action_type]
         tot_price = action[action_type]/(torch.sum(action)+ eps) * self.account.balance * 0.05 
         amount = tot_price/current_price
@@ -224,8 +224,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[0] = (0, 0)
             else:
-                reward -= 0.01/100
-
+                # reward -= 0.01/100
+                pass
 
         elif action_type==SELL_L2X:
             if (amount > self.CPS[1][1]):
@@ -244,8 +244,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[1] = (0, 0)
             else:
-                reward -= 0.01/100
-
+                # reward -= 0.01/100
+                pass
 
         elif action_type==SHORT1X:
             if self.account.withdraw(tot_price):
@@ -275,8 +275,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[2] = (0, 0)
             else:
-                reward -= 0.01/100
-
+                # reward -= 0.01/100
+                pass
 
         elif action_type==SELL_S2X:
             if (amount > self.CPS[3][1]):
@@ -295,8 +295,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[3] = (0, 0)
             else:
-                reward -= 0.01/100
-
+                # reward -= 0.01/100
+                pass
         return reward
 
 

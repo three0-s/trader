@@ -6,7 +6,7 @@ from collections import deque
 
 BATCH_SIZE = 128
 REPLAY_BUFFER_SIZE = 10000000
-FRAME_HISTORY_LEN = 16
+FRAME_HISTORY_LEN = 64
 TARGET_UPDATE_FREQ = 10000
 GAMMA = 0.99
 LEARNING_FREQ = 4
@@ -15,14 +15,14 @@ ALPHA = 0.95
 EPS = 0.01
 LEARNING_STARTS = 100000
 DATA_DIR = "/mnt/won/data"
-RENDER_DIR = "/mnt/won/render"
+RENDER_DIR = "/mnt/won/render/"
 STEPS = 10e8
-EMB_DIM=512
+EMB_DIM=256
 N_STOCK=1
-NUM_HEADS=16
+NUM_HEADS=4
 NUM_LAYERS=6
 
-model_path = "/mnt/won/models/dueling_100000_Tue_May__9_14:59:17_2023.model"
+model_path = "/mnt/won/models/dueling_1700000_Wed_May_10_13:08:00_2023.model"
 
 
 
@@ -63,10 +63,10 @@ if __name__ == "__main__":
                     action = Q(s).cpu().squeeze() #(16, )
                 
                 obs, rewards, done, info = env.step(action)
-                if type(rewards) == torch.Tensor:
-                    rewards = rewards.detach().cpu().numpy()
                 if (done):
+                    tot_reward = env.get_net_profit_rate()
+                    env.render()
                     break
                 env.render()
-        print(f"Total net profit rate: {tot_reward*100:.2f}")
+        print(f"Total net profit rate: {tot_reward*100:.2f}%")
         

@@ -11,7 +11,7 @@ from torchinfo import summary
 # Extended data table 1 of nature paper
 BATCH_SIZE = 128
 REPLAY_BUFFER_SIZE = 10000000
-FRAME_HISTORY_LEN = 16
+FRAME_HISTORY_LEN = 64
 TARGET_UPDATE_FREQ = 10000
 GAMMA = 0.99
 LEARNING_FREQ = 4
@@ -23,16 +23,17 @@ LEARNING_STARTS = 100000
 DATA_DIR = "/mnt/won/data"
 RENDER_DIR = "render"
 STEPS = 10e8
-EMB_DIM=512
+EMB_DIM=256
 N_STOCK=1
-NUM_HEADS=16
+NUM_HEADS=4
+WEIGHT_DECAY=1e-5
 NUM_LAYERS=6
 
 def train(env, num_timesteps):
     
     optimizer = OptimizerSpec(
-        constructor=optim.RMSprop,
-        kwargs=dict(lr=LEARNING_RATE, alpha=ALPHA, eps=EPS)
+        constructor=optim.AdamW,
+        kwargs=dict(lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     )
     device = 'cpu' if not torch.cuda.is_available() else 'cuda'
 

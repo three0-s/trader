@@ -1,9 +1,9 @@
 import cv2 
 from glob import glob
 
-pathIn= '/Users/yewon/Documents/traderWon/envs/test_render/7/162935/1683461084/*.png'
-pathOut = '/Users/yewon/Documents/traderWon/envs/test_render/video.mp4'
-fps = 3
+pathIn= '/mnt/won/render/prev/5/1926340/1683621573/*.png'
+pathOut = '/mnt/won/render/prev/video_s2.mp4'
+fps = 5
 frame_array = []
 paths = sorted(glob(pathIn))
 for idx , path in enumerate(paths) : 
