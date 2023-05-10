@@ -8,6 +8,7 @@ import os
 import itertools
 import numpy as np
 import random
+from torch import nn
 from collections import namedtuple
 from utils.replay_buffer import ReplayBuffer
 from model import Dueling_DQN
@@ -102,7 +103,10 @@ def dqn_learning(env:CryptoMarketEnv,
     # create replay buffer
     replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len, num_actions)
 
-
+    
+    #  Huber Loss 
+    objective = nn.SmoothL1Loss(reduction='none')
+    
     ###############
     # RUN ENV     #
     ###############
@@ -156,7 +160,6 @@ def dqn_learning(env:CryptoMarketEnv,
 
         # update last_obs
         last_obs = obs
-
         ### 3. Perform experience replay and train the network.
         # if the replay buffer contains enough samples...
         if (t > learning_starts and
@@ -196,20 +199,21 @@ def dqn_learning(env:CryptoMarketEnv,
 
             # Compute Bellman error
             # r + gamma * Q(s',a', theta_i_frozen) - Q(s, a, theta_i)
-            error = rew_t + gamma * q_s_a_prime - q_s_a
-
-            # clip the error and flip 
-            clipped_error = -1.0 * error.clamp(-1, 1)
-
+#             error = rew_t + gamma * q_s_a_prime - q_s_a
+            loss = objective(rew_t + gamma * q_s_a_prime, q_s_a)
             # backwards pass
             optimizer.zero_grad()
-            q_s_a.backward(clipped_error)
-
+            q_s_a.backward(loss)
+            torch.nn.utils.clip_grad_norm_(Q.parameters(), 5)
             # update
             optimizer.step()
             num_param_updates += 1
 
             # update target Q network weights with current Q network weights
+            if t % LOG_EVERY_N_STEPS == 0:
+                mloss = np.mean(to_np(loss))
+                logger.scalar_summary("Training Loss (Huber)", mloss, t+1)
+                logger.LogAndPrint(f"Training Loss (Huber) {mloss:.3f}")
             
             if num_param_updates % target_update_freq == 0:
                 Q_target.load_state_dict(Q.state_dict())
