@@ -12,22 +12,20 @@ from collections import namedtuple
 from utils.replay_buffer import ReplayBuffer
 from model import Dueling_DQN
 from utils.schedule import LinearSchedule
-from utils.logger import Logger
 import time
-# import gym
+from utils.logger import Logger
 from envs.env import CryptoMarketEnv
 from gym import spaces
-from collections import deque
 from utils.wrapper import get_wrapper_by_name
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
-# Set the logger
-logger = Logger('./logs')
+
 def to_np(x:torch.Tensor):
     return x.detach().cpu().numpy() 
 
 def dqn_learning(env:CryptoMarketEnv,
+          logger:Logger,
           optimizer_spec,
           device,
           q_func=Dueling_DQN,
@@ -100,7 +98,7 @@ def dqn_learning(env:CryptoMarketEnv,
 
     # initialize optimizer
     optimizer = optimizer_spec.constructor(Q.parameters(), **optimizer_spec.kwargs)
-
+    
     # create replay buffer
     replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len, num_actions)
 
@@ -114,6 +112,7 @@ def dqn_learning(env:CryptoMarketEnv,
     last_obs = env.reset()
     LOG_EVERY_N_STEPS = 1000
     SAVE_MODEL_EVERY_N_STEPS = 100000
+
 
     for t in itertools.count():
         ### 1. Check stopping criterion
@@ -240,14 +239,14 @@ def dqn_learning(env:CryptoMarketEnv,
             mean_episode_reward = np.mean(episode_rewards[-100:])
             best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
         if t % LOG_EVERY_N_STEPS == 0:
-            print("---------------------------------")
-            print("Timestep %d" % (t,))
-            print("learning started? %d" % (t > learning_starts))
-            print("mean reward (100 episodes) %f" % mean_episode_reward)
-            print("best mean reward %f" % best_mean_episode_reward)
-            print("episodes %d" % len(episode_rewards))
-            print("exploration %f" % exploration.value(t))
-            print("learning_rate %f" % optimizer_spec.kwargs['lr'])
+            logger.LogAndPrint("---------------------------------")
+            logger.LogAndPrint("Timestep %d" % (t,))
+            logger.LogAndPrint("learning started? %d" % (t > learning_starts))
+            logger.LogAndPrint("mean reward (100 episodes) %f" % mean_episode_reward)
+            logger.LogAndPrint("best mean reward %f" % best_mean_episode_reward)
+            logger.LogAndPrint("episodes %d" % len(episode_rewards))
+            logger.LogAndPrint("exploration %f" % exploration.value(t))
+            logger.LogAndPrint("learning_rate %f" % optimizer_spec.kwargs['lr'])
             sys.stdout.flush()
 
             #============ TensorBoard logging ============#

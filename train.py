@@ -2,43 +2,60 @@ from learner import dqn_learning, OptimizerSpec
 from utils.schedule import LinearSchedule
 from model import Dueling_DQN
 from envs.env import CryptoMarketEnv
+from utils.logger import Logger
 from utils.wrapper import get_wrapper_by_name, get_env
 import torch.optim as optim
 import torch
 from torchinfo import summary
+import sys 
+
+
 
 # Global Variables
 # Extended data table 1 of nature paper
-BATCH_SIZE = 128
-REPLAY_BUFFER_SIZE = 10000000
-FRAME_HISTORY_LEN = 64
+BATCH_SIZE = 256
+REPLAY_BUFFER_SIZE = 50000000
+FRAME_HISTORY_LEN = 32
 TARGET_UPDATE_FREQ = 10000
 GAMMA = 0.99
 LEARNING_FREQ = 4
 LEARNING_RATE = 1e-4
-ALPHA = 0.95
-EPS = 0.01
 EXPLORATION_SCHEDULE = LinearSchedule(2000000, 0.1)
 LEARNING_STARTS = 100000
 DATA_DIR = "/mnt/won/data"
 RENDER_DIR = "render"
 STEPS = 10e8
-EMB_DIM=256
+EMB_DIM=512
 N_STOCK=1
 NUM_HEADS=4
 WEIGHT_DECAY=1e-5
 NUM_LAYERS=6
 
 def train(env, num_timesteps):
-    
     optimizer = OptimizerSpec(
         constructor=optim.AdamW,
         kwargs=dict(lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     )
     device = 'cpu' if not torch.cuda.is_available() else 'cuda'
+    # Set the logger
+    logger = Logger('./logs')
+
+    logger.LogAndPrint("="*40)
+    logger.LogAndPrint("TRAINING CONFIGS".center(40))
+    logger.LogAndPrint("")
+    logger.LogAndPrint("Batch Size".ljust(20)+f"{BATCH_SIZE}".rjust(20))
+    logger.LogAndPrint("Replay Buffer Size".ljust(20)+f"{REPLAY_BUFFER_SIZE}".rjust(20))
+    logger.LogAndPrint("Time Sequence".ljust(20)+f"{FRAME_HISTORY_LEN}".rjust(20))
+    logger.LogAndPrint("Learning Rate".ljust(20)+f"{LEARNING_RATE:.4f}".rjust(20))
+    logger.LogAndPrint("Model Dimension".ljust(20)+f"{EMB_DIM}".rjust(20))
+    logger.LogAndPrint("# of Attention Heads".ljust(20)+f"{NUM_HEADS}".rjust(20))
+    logger.LogAndPrint("# of Attention Layers".ljust(20)+f"{NUM_LAYERS}".rjust(20))
+    logger.LogAndPrint("="*40)
+    sys.stdout.flush()
 
     dqn_learning(
         env=env,
+        logger=logger,
         optimizer_spec=optimizer,
         device=device,
         q_func=Dueling_DQN,

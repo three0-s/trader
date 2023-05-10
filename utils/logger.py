@@ -3,12 +3,23 @@ import tensorflow as tf
 import numpy as np
 from torchvision.transforms import ToTensor
 from torch.utils.tensorboard import SummaryWriter
+from time import time 
+import os
+
 
 class Logger(object):
     
     def __init__(self, log_dir):
         """Create a summary writer logging to log_dir."""
         self.writer = SummaryWriter(log_dir)
+        self.strlogpath = os.path.join(log_dir, f"{str(int(time()))}.txt")
+        self.strlogF = open(self.strlogpath)
+
+
+    def LogAndPrint(self, txt):
+        print(txt)
+        self.strlogF.write(txt+"\n")
+
 
     def scalar_summary(self, tag, value, step):
         """Log a scalar variable."""
@@ -32,3 +43,4 @@ class Logger(object):
 
     def close(self):
         self.writer.close()
+        self.strlogF.close()
