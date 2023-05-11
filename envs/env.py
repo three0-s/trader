@@ -187,15 +187,6 @@ class CryptoMarketEnv(gym.Env):
     def _take_action(self, action):
         action_type = torch.argmax(action)
 
-        # assert all the elements be semi-positive
-        action -= torch.min(action)
-        action = torch.abs(action)
-        # amount = action[action_type]
-        tot_price = action[action_type]/(torch.sum(action)+ eps) * self.account.balance * 0.05 
-        amount = torch.abs(tot_price/current_price)
-        assert amount >= 0, f"Trading units must be semi-positive; Got Total Price: {tot_price}, Acc Balance: {self.account.balance}, \
-                             Current Price: {current_price} and amount: {amount}"
-        
         if action_type == LONG1X or action_type == LONG2X:
             # Set the current price to the highest price within the time step
             current_price = self.current_map_df['High'].iloc[self.cur]
@@ -210,6 +201,15 @@ class CryptoMarketEnv(gym.Env):
             current_price = self.current_map_df['High'].iloc[self.cur]
         elif action_type == NOOP:
             current_price = 1
+            
+        # assert all the elements be semi-positive
+        action -= torch.min(action)
+        action = torch.abs(action)
+        # amount = action[action_type]
+        tot_price = action[action_type]/(torch.sum(action)+ eps) * self.account.balance * 0.05 
+        amount = torch.abs(tot_price/current_price)
+        assert amount >= 0, f"Trading units must be semi-positive; Got Total Price: {tot_price}, Acc Balance: {self.account.balance}, \
+                             Current Price: {current_price} and amount: {amount}"
         
         # reward = self.get_net_profit_rate()
         reward = 0
