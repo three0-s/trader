@@ -194,8 +194,9 @@ class CryptoMarketEnv(gym.Env):
         action = torch.abs(action)
         # amount = action[action_type]
         tot_price = action[action_type]/(torch.sum(action)+ eps) * self.account.balance * 0.05 
-        amount = tot_price/current_price
-        assert amount > 0, "Trading units must be positive"
+        amount = torch.abs(tot_price/current_price)
+        assert amount >= 0, f"Trading units must be semi-positive; Got Total Price: {tot_price}, Acc Balance: {self.account.balance}, \
+                             Current Price: {current_price} and amount: {amount}"
         # reward = self.get_net_profit_rate()
         reward = 0
         if action_type==NOOP:
