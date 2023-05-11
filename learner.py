@@ -15,9 +15,10 @@ from model import Dueling_DQN
 from utils.schedule import LinearSchedule
 import time
 from utils.logger import Logger
-from envs.env import CryptoMarketEnv
+from envs.env import CryptoMarketEnv, ACTION_DICT
 from gym import spaces
 from utils.wrapper import get_wrapper_by_name
+
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs"])
 
@@ -117,6 +118,9 @@ def dqn_learning(env:CryptoMarketEnv,
     LOG_EVERY_N_STEPS = 1000
     SAVE_MODEL_EVERY_N_STEPS = 100000
 
+    prev_actions = dict()
+    for i in range(num_actions):
+        prev_actions[i] = 0
 
     for t in itertools.count():
         ### 1. Check stopping criterion
@@ -144,6 +148,8 @@ def dqn_learning(env:CryptoMarketEnv,
                 # action = ((q_value_all_actions).max(1)[1])[0]
             else:
                 action = torch.rand(env.action_space.shape).to(torch.float32).detach().cpu()
+
+        
 
         obs, reward, done, info = env.step(action)
         if type(reward) != torch.Tensor:
@@ -208,13 +214,23 @@ def dqn_learning(env:CryptoMarketEnv,
             # update
             optimizer.step()
             num_param_updates += 1
-
+            prev_actions[int(to_np(torch.argmax(action)))] += 1
             # update target Q network weights with current Q network weights
             if t % LOG_EVERY_N_STEPS == 0:
                 mloss = np.mean(to_np(loss))
                 logger.scalar_summary("Training Loss (Huber)", mloss, t+1)
                 logger.LogAndPrint(f"Training Loss (Huber) {mloss:.3f}")
             
+                sum = 0
+                for a in prev_actions.keys():
+                    sum += prev_actions[a]
+
+                for a in prev_actions.keys():
+                    logger.scalar_summary(f"{ACTION_DICT[a]} (%)", prev_actions[a]*100/sum, t+1)
+                    logger.LogAndPrint(f"{ACTION_DICT[a]} (%)", prev_actions[a]*100/sum)
+                for a in prev_actions.keys():
+                    prev_actions[a] = 0
+
             if num_param_updates % target_update_freq == 0:
                 Q_target.load_state_dict(Q.state_dict())
 

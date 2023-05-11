@@ -22,6 +22,18 @@ SELL_S2X=6
 SHORT1X=7
 SELL_S1X=8
 
+ACTION_DICT = {
+    NOOP: "No OP",
+    LONG1X: "Long 1x",
+    LONG2X: "Long 2x",
+    SELL_L1X: "Sell Long 1x",
+    SELL_L2X: "Sell Long 2x",
+    SHORT1X: "Short 1x",
+    SHORT2X: "Short 2x",
+    SELL_S1X: "Sell Short 1x",
+    SELL_S2X: "Sell Short 2x",
+}
+
 
 eps = 1e-7
 MAX_BALANCE = 10e9

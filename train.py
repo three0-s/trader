@@ -25,11 +25,13 @@ LEARNING_STARTS = 50000
 DATA_DIR = "/mnt/won/data"
 RENDER_DIR = "render"
 STEPS = 10e8
-EMB_DIM=256
+EMB_DIM=512
 N_STOCK=1
 NUM_HEADS=8
 WEIGHT_DECAY=1e-5
 NUM_LAYERS=6
+SL = 0.05
+TP = 0.1
 
 def train(env, num_timesteps):
     optimizer = OptimizerSpec(
@@ -80,8 +82,8 @@ def train(env, num_timesteps):
 if __name__ == "__main__":
     env = CryptoMarketEnv(data_dir=DATA_DIR,
                           n_stock=14,
-                          SL=0.25,
-                          TP=0.7,
+                          SL=SL,
+                          TP=TP,
                           render_dir=RENDER_DIR)
     env = get_env(env, 928, RENDER_DIR)
     print("="*40)
