@@ -156,25 +156,25 @@ class CryptoMarketEnv(gym.Env):
             # SELL ALL HOLDING SHARES
             # self.cur = len(self.current_map_df)-2 # time travel
             action = torch.zeros(self.action_space.shape)
-            action[SELL_L1X]=1e8
+            action[SELL_L1X]=1
             r = self._take_action(action)
             r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
-            action[SELL_L2X]=1e8
+            action[SELL_L2X]=1
             r = self._take_action(action)
             r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
-            action[SELL_S1X]=1e8
+            action[SELL_S1X]=1
             r = self._take_action(action)
             r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
-            action[SELL_S2X]=1e8
+            action[SELL_S2X]=1
             r = self._take_action(action)
             r=0 if r < 0 else r
             reward+=r
@@ -187,6 +187,15 @@ class CryptoMarketEnv(gym.Env):
     def _take_action(self, action):
         action_type = torch.argmax(action)
 
+        # assert all the elements be semi-positive
+        action -= torch.min(action)
+        action = torch.abs(action)
+        # amount = action[action_type]
+        tot_price = action[action_type]/(torch.sum(action)+ eps) * self.account.balance * 0.05 
+        amount = torch.abs(tot_price/current_price)
+        assert amount >= 0, f"Trading units must be semi-positive; Got Total Price: {tot_price}, Acc Balance: {self.account.balance}, \
+                             Current Price: {current_price} and amount: {amount}"
+        
         if action_type == LONG1X or action_type == LONG2X:
             # Set the current price to the highest price within the time step
             current_price = self.current_map_df['High'].iloc[self.cur]
@@ -201,14 +210,7 @@ class CryptoMarketEnv(gym.Env):
             current_price = self.current_map_df['High'].iloc[self.cur]
         elif action_type == NOOP:
             current_price = 1
-        # assert all the elements be semi-positive
-        action -= torch.min(action)
-        action = torch.abs(action)
-        # amount = action[action_type]
-        tot_price = action[action_type]/(torch.sum(action)+ eps) * self.account.balance * 0.05 
-        amount = torch.abs(tot_price/current_price)
-        assert amount >= 0, f"Trading units must be semi-positive; Got Total Price: {tot_price}, Acc Balance: {self.account.balance}, \
-                             Current Price: {current_price} and amount: {amount}"
+        
         # reward = self.get_net_profit_rate()
         reward = 0
         if action_type==NOOP:
@@ -224,8 +226,8 @@ class CryptoMarketEnv(gym.Env):
                                self.CPS[1][1] + amount)
                 
         elif action_type==SELL_L1X:
-            if (amount > self.CPS[0][1]):
-                amount = self.CPS[0][1]
+            # if (amount > self.CPS[0][1]):
+            amount = self.CPS[0][1]
             if amount > 0:
                 # balance update & reward
                 self.account.deposit(current_price * amount * (1-self.fee))
@@ -241,8 +243,8 @@ class CryptoMarketEnv(gym.Env):
                 pass
 
         elif action_type==SELL_L2X:
-            if (amount > self.CPS[1][1]):
-                amount = self.CPS[1][1]
+            # if (amount > self.CPS[1][1]):
+            amount = self.CPS[1][1]
 
             if amount > 0:
                 # balance update & reward
@@ -271,8 +273,8 @@ class CryptoMarketEnv(gym.Env):
                                self.CPS[3][1] + amount)
                 
         elif action_type==SELL_S1X:
-            if (amount > self.CPS[2][1]):
-                amount = self.CPS[2][1]
+            # if (amount > self.CPS[2][1]):
+            amount = self.CPS[2][1]
 
             if amount > 0:
                 # balance update & reward
@@ -292,8 +294,8 @@ class CryptoMarketEnv(gym.Env):
                 pass
 
         elif action_type==SELL_S2X:
-            if (amount > self.CPS[3][1]):
-                amount = self.CPS[3][1]
+            # if (amount > self.CPS[3][1]):
+            amount = self.CPS[3][1]
 
             if amount > 0:
                 # balance update & reward
