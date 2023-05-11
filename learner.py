@@ -192,10 +192,10 @@ def dqn_learning(env:CryptoMarketEnv,
             # max(Q(s', a', theta_i_frozen)) wrt a'
             with torch.no_grad():
                 q_tp1_values = Q_target(obs_tp1).detach()
-            q_s_a_prime, a_prime  = q_tp1_values.max(dim=2)
-            q_s_a_prime = q_s_a_prime.squeeze()
-            # if current state is end of episode, then there is no next Q value
-            q_s_a_prime = (1 - done_mask) * q_s_a_prime 
+                q_s_a_prime, a_prime  = q_tp1_values.max(dim=2)
+                q_s_a_prime = q_s_a_prime.squeeze()
+                # if current state is end of episode, then there is no next Q value
+                q_s_a_prime = (1 - done_mask) * q_s_a_prime 
 
             # Compute Bellman error
             # r + gamma * Q(s',a', theta_i_frozen) - Q(s, a, theta_i)
@@ -203,8 +203,8 @@ def dqn_learning(env:CryptoMarketEnv,
             loss = objective(rew_t + gamma * q_s_a_prime, q_s_a)
             # backwards pass
             optimizer.zero_grad()
-            q_s_a.backward(loss)
-            torch.nn.utils.clip_grad_norm_(Q.parameters(), 5)
+            loss.mean().backward()
+            torch.nn.utils.clip_grad_norm_(Q.parameters(), 100)
             # update
             optimizer.step()
             num_param_updates += 1
