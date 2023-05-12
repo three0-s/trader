@@ -256,12 +256,12 @@ class CryptoMarketEnv(gym.Env):
                 total_shares = self.CPS[1][0]*amount * (1-self.fee)
                 self.account.deposit(profit+total_shares)
 #                 reward += profit / (self.CPS[1][0] * amount)
-                reward += self.get_net_profit_rate()
                 # CPS state update
                 if (amount < self.CPS[1][1]):
                     self.CPS[1] = (self.CPS[1][0], self.CPS[1][1]-amount)
                 else:
                     self.CPS[1] = (0, 0)
+                reward += self.get_net_profit_rate()
             else:
                 # reward -= 0.01/100
                 pass
@@ -286,13 +286,14 @@ class CryptoMarketEnv(gym.Env):
                 total_shares = self.CPS[2][0] * amount * (1-self.fee)
                 self.account.deposit(profit+total_shares)
 #                 reward += profit / (self.CPS[2][0] * amount+ eps)
-                reward += self.get_net_profit_rate()
+                
                 
                 # CPS state update
                 if (amount < self.CPS[2][1]):
                     self.CPS[2] = (self.CPS[2][0], self.CPS[2][1]-amount)
                 else:
                     self.CPS[2] = (0, 0)
+                reward += self.get_net_profit_rate()
             else:
                 # reward -= 0.01/100
                 pass
@@ -307,12 +308,12 @@ class CryptoMarketEnv(gym.Env):
                 total_shares = self.CPS[3][0]*amount * (1-self.fee)
                 self.account.deposit(profit+total_shares)
 #                 reward += profit / (self.CPS[3][0] * amount+ eps)
-                reward += self.get_net_profit_rate()
                 # CPS state update
                 if (amount < self.CPS[3][1]):
                     self.CPS[3] = (self.CPS[3][0], self.CPS[3][1]-amount)
                 else:
                     self.CPS[3] = (0, 0)
+                reward += self.get_net_profit_rate()
             else:
                 # reward -= 0.01/100
                 pass
