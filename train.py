@@ -13,16 +13,16 @@ import sys
 
 # Global Variables
 # Extended data table 1 of nature paper
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 REPLAY_BUFFER_SIZE = 50000000
-FRAME_HISTORY_LEN = 64
+FRAME_HISTORY_LEN = 128
 TARGET_UPDATE_FREQ = 10000
 GAMMA = 0.99
 LEARNING_FREQ = 4
 LEARNING_RATE = 1e-4
 EXPLORATION_SCHEDULE = LinearSchedule(1000000, 0.1)
 LEARNING_STARTS = 50000
-DATA_DIR = "/mnt/won/data"
+DATA_DIR = "/root/won/data"
 RENDER_DIR = "render"
 STEPS = 10e8
 EMB_DIM=512
@@ -30,8 +30,8 @@ N_STOCK=1
 NUM_HEADS=8
 WEIGHT_DECAY=1e-5
 NUM_LAYERS=8
-SL = 0.04
-TP = 0.08
+SL = 0.01
+TP = 0.02
 
 def train(env, num_timesteps, device):
     optimizer = OptimizerSpec(
