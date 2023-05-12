@@ -38,6 +38,7 @@ ACTION_DICT = {
 eps = 1e-7
 MAX_BALANCE = 10e9
 INIT_BALANCE = 10e5
+GAME_LEN = 24*60
 class CryptoMarketEnv(gym.Env): 
     metadata = {'render.modes': ['human']}
     def __init__(self, data_dir, n_stock, SL:float, TP:float, render_dir):
@@ -58,14 +59,15 @@ class CryptoMarketEnv(gym.Env):
 
         self.current_map_df = None
         self.cur = 0
+        self.init_cur=self.cur
         # (CPS, # of shares) 
         self.CPS = [(0, 0), # Long 1x 
                     (0, 0), # Long 2x 
                     (0, 0), # Short 1x 
                     (0, 0)] # Short 2x  
                               
-        self.action_space = spaces.Box(low=0, high=1000000, shape=(9,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=0, high=1000000, shape=(16,), dtype=np.float32) 
+        self.action_space = spaces.Box(low=0, high=10000000, shape=(9,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0, high=10000000, shape=(16,), dtype=np.float32) 
         # state vector 
         #         s_t = [Count Open High Low Close Vol VWAP Balance C_L1 S_L1 C_L2 S_L2 C_S1 S_S1 C_S2 S_S2]
         self.reward_range = (-MAX_BALANCE, MAX_BALANCE) 
@@ -88,6 +90,7 @@ class CryptoMarketEnv(gym.Env):
         now = str(int(time()))
         self.current_render_dir = os.path.join(self.render_dir, str(map_no), os.path.basename(dfname).replace('.csv', ''), now)
         self.cur=random.randint(0, len(self.current_map_df)//2)
+        self.init_cur=self.cur
         self.account.set_balance(INIT_BALANCE)
 
         return self._next_observation()
@@ -138,7 +141,7 @@ class CryptoMarketEnv(gym.Env):
 
 
     def _isend(self):
-        if (self.cur >= len(self.current_map_df)-2):
+        if (self.cur >= len(self.current_map_df)-2 or self.cur-self.init_cur > GAME_LEN):
             return True
         networth = self.get_networth()
         if (networth <= INIT_BALANCE*(1-self.SL) or networth >= INIT_BALANCE*(1+self.TP)):
@@ -323,10 +326,11 @@ class CryptoMarketEnv(gym.Env):
         except OSError:
             pass
 
-        st = self.cur-15 if self.cur >= 15  else 0
+        st = self.cur-64 if self.cur >= 64  else 0
         pre = self.current_map_df.iloc[st:self.cur]
-        fig = plt.figure(figsize=(6, 4))
+        fig = plt.figure(figsize=(8, 4))
         ax = fig.add_subplot(1, 2, 1)
+        ax.spines['bottom'].set_visible(False)
         ax.set_ylabel("USD")
         plt.grid()
         ay = fig.add_subplot(1, 2, 2)

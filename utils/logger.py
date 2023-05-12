@@ -11,8 +11,11 @@ class Logger(object):
     
     def __init__(self, log_dir):
         """Create a summary writer logging to log_dir."""
-        self.writer = SummaryWriter(log_dir)
-        self.strlogpath = os.path.join(log_dir, f"{str(int(time()))}.txt")
+        self.logdir = os.path.join(log_dir, str(int(time())))
+        os.makedirs(self.logdir, exist_ok=True)
+
+        self.writer = SummaryWriter(self.logdir)
+        self.strlogpath = os.path.join(self.logdir, "log.txt")
         self.strlogF = open(self.strlogpath, "w")
 
 

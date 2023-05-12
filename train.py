@@ -13,32 +13,31 @@ import sys
 
 # Global Variables
 # Extended data table 1 of nature paper
-BATCH_SIZE = 512
+BATCH_SIZE = 32
 REPLAY_BUFFER_SIZE = 50000000
-FRAME_HISTORY_LEN = 32
+FRAME_HISTORY_LEN = 64
 TARGET_UPDATE_FREQ = 10000
 GAMMA = 0.99
 LEARNING_FREQ = 4
-LEARNING_RATE = 5e-4
-EXPLORATION_SCHEDULE = LinearSchedule(500000, 0.1)
+LEARNING_RATE = 1e-4
+EXPLORATION_SCHEDULE = LinearSchedule(1000000, 0.1)
 LEARNING_STARTS = 50000
 DATA_DIR = "/mnt/won/data"
 RENDER_DIR = "render"
 STEPS = 10e8
-EMB_DIM=256
+EMB_DIM=512
 N_STOCK=1
 NUM_HEADS=8
 WEIGHT_DECAY=1e-5
-NUM_LAYERS=6
-SL = 0.03
-TP = SL*2
+NUM_LAYERS=8
+SL = 0.04
+TP = 0.08
 
-def train(env, num_timesteps):
+def train(env, num_timesteps, device):
     optimizer = OptimizerSpec(
         constructor=optim.AdamW,
         kwargs=dict(lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     )
-    device = 'cpu' if not torch.cuda.is_available() else 'cuda'
     # Set the logger
     logger = Logger('./logs')
 
@@ -51,7 +50,9 @@ def train(env, num_timesteps):
     logger.LogAndPrint("Learning Rate".ljust(20)+f"{LEARNING_RATE:.4f}".rjust(20))
     logger.LogAndPrint("Model Dimension".ljust(20)+f"{EMB_DIM}".rjust(20))
     logger.LogAndPrint("# of Attention Heads".ljust(20)+f"{NUM_HEADS}".rjust(20))
-    logger.LogAndPrint("# of Attention Layers".ljust(20)+f"{NUM_LAYERS}".rjust(20))
+    logger.LogAndPrint("# of Attention Layer".ljust(20)+f"{NUM_LAYERS}".rjust(20))
+    logger.LogAndPrint("Stop Loss".ljust(20)+f"{SL:.3f}".rjust(20))
+    logger.LogAndPrint("Take Profit".ljust(20)+f"{TP:.3f}".rjust(20))
     logger.LogAndPrint("="*40)
     sys.stdout.flush()
 
@@ -85,14 +86,16 @@ if __name__ == "__main__":
                           SL=SL,
                           TP=TP,
                           render_dir=RENDER_DIR)
-    env = get_env(env, 928, RENDER_DIR)
+    env = get_env(env, 118, RENDER_DIR)
+    device = 'cpu' if not torch.cuda.is_available() else torch.device('cuda:0')
+    
     print("="*40)
     print("Train Start! ...".center(40))
     print("="*40)
     B, N, L, F, D = BATCH_SIZE, 1, FRAME_HISTORY_LEN, 16, EMB_DIM
 
     A = 9
-    a = torch.zeros(B, N, L, F)
-    model = Dueling_DQN(F, A, D, N, 8, NUM_LAYERS, L)
+    a = torch.zeros(B, N, L, F).to(device)
+    model = Dueling_DQN(F, A, D, N, NUM_HEADS, NUM_LAYERS, L).to(device)
     summary(model, (B, N, L, F))
-    train(env, STEPS)
+    train(env, STEPS, device=device)
