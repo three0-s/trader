@@ -11,29 +11,29 @@ GAMMA = 0.99
 LEARNING_FREQ = 4
 LEARNING_RATE = 1e-4
 
-DATA_DIR = "/mnt/won/data"
-RENDER_DIR = "/mnt/won/render/"
+DATA_DIR = "/root/won/data"
+RENDER_DIR = "/root/won/render/"
 
 
 
-FRAME_HISTORY_LEN = 32
+FRAME_HISTORY_LEN = 128
 
 LEARNING_STARTS = 50000
 
-EMB_DIM=256
+EMB_DIM=512
 N_STOCK=1
 NUM_HEADS=8
-NUM_LAYERS=6
+NUM_LAYERS=8
 
-model_path = "/mnt/won/models/dueling_700000_Fri_May_12_02:21:57_2023.model"
+model_path = "/root/won/models/dueling_500000_Fri_May_12_14:43:07_2023.model"
 
 
 
 if __name__ == "__main__":
     env = CryptoMarketEnv(data_dir=DATA_DIR,
                         n_stock=14,
-                        SL=0.02,
-                        TP=0.03,
+                        SL=0.015,
+                        TP=0.02,
                         render_dir=RENDER_DIR)
     F = env.observation_space.shape[0]
     N = 1
@@ -44,7 +44,8 @@ if __name__ == "__main__":
     device = torch.device("cuda:0")
     Q = Dueling_DQN(in_channels, num_actions, EMB_DIM, N_STOCK, NUM_HEADS, NUM_LAYERS, FRAME_HISTORY_LEN)
     Q.load_state_dict(torch.load(model_path))
-    Q.eval().to(device)
+    Q.to(device)
+#     Q.eval().to(device)
 
     with torch.no_grad():
         obs = env.reset()
