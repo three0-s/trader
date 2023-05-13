@@ -4,10 +4,10 @@ import pandas as pd
 import random
 import gym
 from gym import spaces
-from .account import VirtualAccount
+from account import VirtualAccount
 from glob import glob
 from matplotlib import pyplot as plt
-import mpl_finance
+import mplfinance as mpf
 from time import time
 import torch
 
@@ -22,6 +22,20 @@ SELL_S2X=6
 SHORT1X=7
 SELL_S1X=8
 
+ID_COIN_NAME = ("Binance Coin",
+                "Bitcoin", 
+                "Bitcoin Cash",
+                "Cardano",
+                "Dogecoin",
+                "EOS.IO",
+                "Ethereum",
+                "Ethereum Classic",
+                "IOTA",
+                "Litecoin",
+                "Maker",
+                "Monero",
+                "Stellar",
+                "TRON")
 ACTION_DICT = {
     NOOP: "No OP",
     LONG1X: "Long 1x",
@@ -58,6 +72,7 @@ class CryptoMarketEnv(gym.Env):
            self.game_maps[i]=glob(os.path.join(data_dir, str(i), "*.csv"))
 
         self.current_map_df = None
+        self.map_no = None
         self.cur = 0
         self.init_cur=self.cur
         # (CPS, # of shares) 
@@ -82,13 +97,16 @@ class CryptoMarketEnv(gym.Env):
                     (0, 0), # Long 2x 
                     (0, 0), # Short 1x 
                     (0, 0)] # Short 2x    
-        map_no = random.randint(0, 13)
-        dfname = random.choice(self.game_maps[map_no])
+        self.map_no = random.randint(0, 13)
+        dfname = random.choice(self.game_maps[self.map_no])
         self.current_map_df = pd.read_csv(dfname)
-        del self.current_map_df['timestamp']
+        
+        self.current_map_df['timestamp'] = pd.to_datetime(self.current_map_df['timestamp'], unit='s')
+        self.current_map_df = self.current_map_df.set_index(['timestamp'])
+        # del self.current_map_df['timestamp']
 
         now = str(int(time()))
-        self.current_render_dir = os.path.join(self.render_dir, str(map_no), os.path.basename(dfname).replace('.csv', ''), now)
+        self.current_render_dir = os.path.join(self.render_dir, str(self.map_no), os.path.basename(dfname).replace('.csv', ''), now)
         endpoint = len(self.current_map_df)-GAME_LEN-1 if (len(self.current_map_df)-GAME_LEN-1)>0 else 0
         self.cur=random.randint(0, endpoint)
         self.init_cur=self.cur
@@ -116,7 +134,7 @@ class CryptoMarketEnv(gym.Env):
     
     
     def get_networth(self):
-        current_price = self.current_map_df['Low'].iloc[self.cur]
+        current_price = self.current_map_df['Close'].iloc[self.cur]
         profit=0
         # Long
         for i in range(2):
@@ -156,31 +174,33 @@ class CryptoMarketEnv(gym.Env):
         reward = self._take_action(action)
         done = self._isend()
         # before_done = (self.cur >= len(self.current_map_df)-2)
+        if reward >= self.TP:
+            print(done)
         if done:
             # SELL ALL HOLDING SHARES
             # self.cur = len(self.current_map_df)-2 # time travel
             action = torch.zeros(self.action_space.shape)
             action[SELL_L1X]=1
             r = self._take_action(action)
-            r=0 if r < 0 else r
+            # r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
             action[SELL_L2X]=1
             r = self._take_action(action)
-            r=0 if r < 0 else r
+            # r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
             action[SELL_S1X]=1
             r = self._take_action(action)
-            r=0 if r < 0 else r
+            # r=0 if r < 0 else r
             reward+=r
 
             action = torch.zeros(self.action_space.shape)
             action[SELL_S2X]=1
             r = self._take_action(action)
-            r=0 if r < 0 else r
+            # r=0 if r < 0 else r
             reward+=r
 
         self.cur+=1
@@ -236,12 +256,12 @@ class CryptoMarketEnv(gym.Env):
                 # balance update & reward
                 self.account.deposit(current_price * amount * (1-self.fee))
                 # reward += (current_price-self.CPS[0][0]) / self.CPS[0][0] * (1-self.fee)
-                reward += self.get_net_profit_rate()
                 # CPS state update
                 if (amount < self.CPS[0][1]):
                     self.CPS[0] = (self.CPS[0][0], self.CPS[0][1]-amount)
                 else:
                     self.CPS[0] = (0, 0)
+                reward += self.get_net_profit_rate()
             else:
                 # reward -= 0.01/100
                 pass
@@ -330,14 +350,15 @@ class CryptoMarketEnv(gym.Env):
 
         st = self.cur-64 if self.cur >= 64  else 0
         pre = self.current_map_df.iloc[st:self.cur]
-        fig = plt.figure(figsize=(8, 4))
-        ax = fig.add_subplot(1, 2, 1)
+        fig = mpf.figure(figsize=(8, 4))
+        ax = fig.add_subplot(1, 2, 1, style='binance')
+        
         ax.spines['bottom'].set_visible(False)
-        ax.set_ylabel("USD")
-        plt.grid()
+        # ax.set_ylabel("Price")
+        ax.grid(linestyle='--')
         ay = fig.add_subplot(1, 2, 2)
         ay.axis('off')
-
+        
         prev = -1
         for i in range(4):
             if self.CPS[i][1] != 0:
@@ -346,8 +367,8 @@ class CryptoMarketEnv(gym.Env):
         profit_rate = self.get_net_profit_rate()*100
         color = 'g' if profit_rate >0 else 'r'
         ay.text(0, 0.7, f"Net Profit Rate: {profit_rate:.2f}%", color=color)
-        mpl_finance.candlestick2_ohlc(ax, pre['Open'], pre['High'], pre['Low'], pre['Close'], width=0.5, colorup='r', colordown='b')
-
-        plt.savefig(os.path.join(self.current_render_dir, f"{self.cur}.png"))
+        mpf.plot(pre, ax=ax, type='candle', axtitle=f'{ID_COIN_NAME[self.map_no]}/USD')
+        
+        fig.savefig(os.path.join(self.current_render_dir, f"{self.cur}.png"))
         plt.close()
         
