@@ -11,7 +11,7 @@ GAMMA = 0.99
 LEARNING_FREQ = 4
 LEARNING_RATE = 1e-4
 
-DATA_DIR = "/mnt/won/data"
+DATA_DIR = "/mnt/won/trader/testdata"
 RENDER_DIR = "/mnt/won/render/"
 
 
@@ -23,18 +23,18 @@ LEARNING_STARTS = 50000
 EMB_DIM=256
 N_STOCK=1
 NUM_HEADS=8
-NUM_LAYERS=6
+NUM_LAYERS=8
 
-model_path = "/mnt/won/models/dueling_2900000_Sat_May_13_13:05:27_2023.model"
+model_path = "/mnt/won/models/dueling_5300000_Sun_May_14_14:06:11_2023.model"
 
 
 
 if __name__ == "__main__":
     env = CryptoMarketEnv(data_dir=DATA_DIR,
                         n_stock=14,
-                        SL=0.03,
-                        TP=0.06,
-                        render_dir=RENDER_DIR)
+                        SL=0.5,
+                        TP=0.003,
+                        render_dir=RENDER_DIR, test=True)
     F = env.observation_space.shape[0]
     N = 1
     input_shape = (N, FRAME_HISTORY_LEN, F)
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     Q.eval().to(device)
     mean_rewards =[]
     with torch.no_grad():
-        obs = env.reset()
+        obs = env.reset(no=6)
         obs_concat = deque(maxlen=FRAME_HISTORY_LEN)
         tot_reward = 0
         i = 0
@@ -70,9 +70,9 @@ if __name__ == "__main__":
             mean_rewards.append(rewards)
             if (done):
                 tot_reward = env.get_net_profit_rate()
-                # env.render()
+                env.render()
                 break
-            # env.render()
+            env.render()
     print(f"Total net profit rate: {tot_reward*100:.2f}%")
-    print(f"max rewards: {max(mean_rewards)*100:.2f}%")
+    # print(f"max rewards: {max(mean_rewards)*100:.2f}%")
     
