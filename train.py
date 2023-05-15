@@ -20,9 +20,9 @@ TARGET_UPDATE_FREQ = 10000
 GAMMA = 0.99
 LEARNING_FREQ = 4
 LEARNING_RATE = 1e-4
-EXPLORATION_SCHEDULE = LinearSchedule(1000000, 0.1)
+EXPLORATION_SCHEDULE = LinearSchedule(3000000, 0.1)
 LEARNING_STARTS = 50000
-DATA_DIR = "/mnt/won/data"
+DATA_DIR = "/root/won/data"
 RENDER_DIR = "render"
 STEPS = 10e8
 EMB_DIM=256
@@ -30,8 +30,8 @@ N_STOCK=1
 NUM_HEADS=8
 WEIGHT_DECAY=1e-5
 NUM_LAYERS=8
-SL = 0.04
-TP = 0.08
+SL = 0.02
+TP = 0.02
 CUDA_NO = 0
 
 def train(env, num_timesteps, device):
