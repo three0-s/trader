@@ -1,7 +1,7 @@
 from learner import dqn_learning, OptimizerSpec
 from utils.schedule import LinearSchedule
 from model import Dueling_DQN
-from envs.env import CryptoMarketEnv
+from envs.env import CryptoMarketEnv, ACTION_DICT
 from utils.logger import Logger
 from utils.wrapper import get_wrapper_by_name, get_env
 import torch.optim as optim
@@ -93,9 +93,9 @@ if __name__ == "__main__":
     print("="*40)
     print("Train Start! ...".center(40))
     print("="*40)
-    B, N, L, F, D = BATCH_SIZE, 1, FRAME_HISTORY_LEN, 16, EMB_DIM
-
-    A = 9
+    A = len(ACTION_DICT.keys())
+    B, N, L, F, D = BATCH_SIZE, 1, FRAME_HISTORY_LEN, 6+len(env.CPS)*2, EMB_DIM
+   
     a = torch.zeros(B, N, L, F).to(device)
     model = Dueling_DQN(F, A, D, N, NUM_HEADS, NUM_LAYERS, L).to(device)
     summary(model, (B, N, L, F))
