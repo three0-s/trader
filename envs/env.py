@@ -4,7 +4,7 @@ import pandas as pd
 import random
 import gym
 from gym import spaces
-from account import VirtualAccount
+from .account import VirtualAccount
 from glob import glob
 from matplotlib import pyplot as plt
 import mplfinance as mpf
@@ -38,30 +38,30 @@ ID_COIN_NAME = ("Binance Coin",
                 "TRON")
 ACTION_DICT = {
     NOOP: "No OP",
-    LONG1X: "Long 1x",
-    LONG2X: "Long 2x",
-    SELL_L1X: "Sell Long 1x",
-    SELL_L2X: "Sell Long 2x",
-    SHORT1X: "Short 1x",
-    SHORT2X: "Short 2x",
-    SELL_S1X: "Sell Short 1x",
-    SELL_S2X: "Sell Short 2x",
+    LONG1X: "Long 10x",
+    LONG2X: "Long 25x",
+    SELL_L1X: "Sell Long 10x",
+    SELL_L2X: "Sell Long 25x",
+    SHORT1X: "Short 10x",
+    SHORT2X: "Short 25x",
+    SELL_S1X: "Sell Short 10x",
+    SELL_S2X: "Sell Short 25x",
 }
 
 
 eps = 1e-7
 MAX_BALANCE = 10e9
 INIT_BALANCE = 10e5
-GAME_LEN = 24*60
+GAME_LEN = 20*60
 class CryptoMarketEnv(gym.Env): 
     metadata = {'render.modes': ['human']}
-    def __init__(self, data_dir, n_stock, SL:float, TP:float, render_dir):
+    def __init__(self, data_dir, n_stock, SL:float, TP:float, render_dir, test=False):
         super(CryptoMarketEnv, self).__init__()
         self.state = None
         self.fee = 0.5/100 # 0.5% fee
         self.data_dir = data_dir
         self.n_stock = n_stock
-        
+        self.test=test
         # Stop Loss and Take Profit
         assert (SL > 0 and SL < 1 and TP > 0), "SL should be less than 1"
         self.SL = SL
@@ -92,23 +92,28 @@ class CryptoMarketEnv(gym.Env):
         net_worth = self.get_networth()
         return (net_worth-INIT_BALANCE) / INIT_BALANCE
 
-    def reset(self):
+    def reset(self, no=None):
         self.CPS = [(0, 0), # Long 1x 
                     (0, 0), # Long 2x 
                     (0, 0), # Short 1x 
                     (0, 0)] # Short 2x    
         self.map_no = random.randint(0, 13)
+        if no != None:
+            self.map_no = no
         dfname = random.choice(self.game_maps[self.map_no])
         self.current_map_df = pd.read_csv(dfname)
         
         self.current_map_df['timestamp'] = pd.to_datetime(self.current_map_df['timestamp'], unit='s')
         self.current_map_df = self.current_map_df.set_index(['timestamp'])
         # del self.current_map_df['timestamp']
+        del self.current_map_df['Count']
 
         now = str(int(time()))
         self.current_render_dir = os.path.join(self.render_dir, str(self.map_no), os.path.basename(dfname).replace('.csv', ''), now)
         endpoint = len(self.current_map_df)-GAME_LEN-1 if (len(self.current_map_df)-GAME_LEN-1)>0 else 0
         self.cur=random.randint(0, endpoint)
+        if self.test:
+            self.cur=0
         self.init_cur=self.cur
         self.account.set_balance(INIT_BALANCE)
 
@@ -149,8 +154,10 @@ class CryptoMarketEnv(gym.Env):
             profit += (current_price-cps)*(i+1)*share
 
         # Short
-        for i in range(2):
-            profit += (self.CPS[i+2][0]-current_price)*(i+1)*self.CPS[i+2][1]
+#         for i in range(1):
+        profit += (self.CPS[2][0]-current_price)*(10)*self.CPS[2][1]
+        
+        profit += (self.CPS[3][0]-current_price)*(20)*self.CPS[3][1]
 
         total_shares=0
         for i in range(4):
@@ -174,8 +181,6 @@ class CryptoMarketEnv(gym.Env):
         reward = self._take_action(action)
         done = self._isend()
         # before_done = (self.cur >= len(self.current_map_df)-2)
-        if reward >= self.TP:
-            print(done)
         if done:
             # SELL ALL HOLDING SHARES
             # self.cur = len(self.current_map_df)-2 # time travel
@@ -211,21 +216,21 @@ class CryptoMarketEnv(gym.Env):
     def _take_action(self, action):
         action_type = torch.argmax(action)
 
-        if action_type == LONG1X or action_type == LONG2X:
-            # Set the current price to the highest price within the time step
-            current_price = self.current_map_df['High'].iloc[self.cur]
-        elif action_type == SELL_L1X or action_type == SELL_L2X:
-            # Set the current price to the lowest price within the time step
-            current_price = self.current_map_df['Low'].iloc[self.cur]
-        if action_type == SHORT1X or action_type == SHORT2X:
-            # Set the current price to the lowest price within the time step
-            current_price = self.current_map_df['Low'].iloc[self.cur]
-        elif action_type == SELL_S1X or action_type == SELL_S2X:
-            # Set the current price to the highest price within the time step
-            current_price = self.current_map_df['High'].iloc[self.cur]
-        elif action_type == NOOP:
-            current_price = 1
-            
+#         if action_type == LONG1X or action_type == LONG2X:
+#             # Set the current price to the highest price within the time step
+#             current_price = self.current_map_df['High'].iloc[self.cur]
+#         elif action_type == SELL_L1X or action_type == SELL_L2X:
+#             # Set the current price to the lowest price within the time step
+#             current_price = self.current_map_df['Low'].iloc[self.cur]
+#         if action_type == SHORT1X or action_type == SHORT2X:
+#             # Set the current price to the lowest price within the time step
+#             current_price = self.current_map_df['Low'].iloc[self.cur]
+#         elif action_type == SELL_S1X or action_type == SELL_S2X:
+#             # Set the current price to the highest price within the time step
+#             current_price = self.current_map_df['High'].iloc[self.cur]
+#         elif action_type == NOOP:
+#             current_price = 1
+        current_price = self.current_map_df['Close'].iloc[self.cur]
         # assert all the elements be semi-positive
         action -= torch.min(action)
         action = torch.abs(action)
@@ -324,7 +329,7 @@ class CryptoMarketEnv(gym.Env):
 
             if amount > 0:
                 # balance update & reward
-                profit = (self.CPS[3][0]-current_price) * (2) * amount * (1-self.fee)
+                profit = (self.CPS[3][0]-current_price) * (20) * amount * (1-self.fee)
                 total_shares = self.CPS[3][0]*amount * (1-self.fee)
                 self.account.deposit(profit+total_shares)
 #                 reward += profit / (self.CPS[3][0] * amount+ eps)
@@ -342,13 +347,13 @@ class CryptoMarketEnv(gym.Env):
 
 
     def render(self, mode='human', close=False):
-        position = ['Long 1x', 'Long 2x', 'Short 1x', 'Short 2x']
+        position = ['Long 1x', 'Long 2x', 'Short 10x', 'Short 20x']
         try:
             os.makedirs(self.current_render_dir)
         except OSError:
             pass
 
-        st = self.cur-64 if self.cur >= 64  else 0
+        st = self.cur-60 if self.cur >= 60  else 0
         pre = self.current_map_df.iloc[st:self.cur]
         fig = mpf.figure(figsize=(8, 4))
         ax = fig.add_subplot(1, 2, 1, style='binance')
