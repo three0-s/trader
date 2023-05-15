@@ -198,7 +198,7 @@ class CryptoMarketEnv(gym.Env):
             action = torch.zeros(self.action_space.shape)
             action[SELL_L10X]=1
             r = self._take_action(action)
-
+            
             action = torch.zeros(self.action_space.shape)
             action[SELL_L25X]=1
             r = self._take_action(action)
@@ -218,7 +218,8 @@ class CryptoMarketEnv(gym.Env):
             action = torch.zeros(self.action_space.shape)
             action[SELL_S100X]=1
             r = self._take_action(action)
-
+            reward += r
+            
         self.cur+=1
         obs = self._next_observation()
         return obs, reward, done, {}
