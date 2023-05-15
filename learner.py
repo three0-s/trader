@@ -227,7 +227,7 @@ def dqn_learning(env:CryptoMarketEnv,
 
                 for a in prev_actions.keys():
                     logger.scalar_summary(f"{ACTION_DICT[a]} (%)", prev_actions[a]*100/sum, t+1)
-                    logger.LogAndPrint(f"{ACTION_DICT[a]} (%)"+ f"{prev_actions[a]*100/sum:.3f}")
+                    logger.LogAndPrint(f"{ACTION_DICT[a]} (%)".ljust(30)+ f"{prev_actions[a]*100/sum:.3f}".rjust(10))
                 for a in prev_actions.keys():
                     prev_actions[a] = 0
 
