@@ -1,10 +1,11 @@
 import ccxt 
 import pprint 
 import pandas as pd
-
+import time
 
 binance = ccxt.binance()
-pair = 'BTC'
+date = time.time()
+pair = 'ETH'
 # markets = binance.load_markets()
 # print(markets.keys())
 # print(len(markets)
@@ -16,9 +17,9 @@ df = pd.DataFrame(btc_ohlcv, columns=columns)
 
 
 # df['timestamp'] = pd.to_datetime(df['datetime'], unit='ms')
-df['Timestamp'] = df['datetime']
+df['timestamp'] = (df['datetime']/1000).astype(int)
 del df['datetime']
-df.set_index('Timestamp', inplace=True)
-df.to_csv(f"230514{pair}.csv")
+df.set_index('timestamp', inplace=True)
+df.to_csv(f"{int(date)}_{pair}.csv")
 
 print(df)

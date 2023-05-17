@@ -396,6 +396,6 @@ class CryptoMarketEnv(gym.Env):
         ay.text(0, 0.8, f"Net Profit Rate: {profit_rate:.2f}%", color=color)
         mpf.plot(pre, ax=ax, type='candle', axtitle=f'{ID_COIN_NAME[self.map_no]}/USD')
         
-        fig.savefig(os.path.join(self.current_render_dir, f"{self.cur}.png"))
+        fig.savefig(os.path.join(self.current_render_dir, f"{self.cur:06d}.png"))
         plt.close()
         

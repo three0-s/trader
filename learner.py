@@ -247,10 +247,10 @@ def dqn_learning(env:CryptoMarketEnv,
 
         ### 4. Log progress
         if t % SAVE_MODEL_EVERY_N_STEPS == 0:
-            if not os.path.exists("models"):
-                os.makedirs("models")
+            if not os.path.exists(os.path.join(logger.logdir, "models")):
+                os.makedirs(os.path.join(logger.logdir, "models"))
             add_str = 'dueling'
-            model_save_path = "models/%s_%d_%s.model" %(add_str, t, str(time.ctime()).replace(' ', '_'))
+            model_save_path = "%s/%s_%d_%s.model" %(os.path.join(logger.logdir, "models"), add_str, t, str(time.ctime()).replace(' ', '_'))
             torch.save(Q.state_dict(), model_save_path)
  
         
