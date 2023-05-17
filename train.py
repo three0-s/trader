@@ -28,10 +28,10 @@ STEPS = 10e8
 EMB_DIM=256
 N_STOCK=1
 NUM_HEADS=8
-WEIGHT_DECAY=1e-5
-NUM_LAYERS=8
+WEIGHT_DECAY=1e-4
+NUM_LAYERS=12
 SL = 0.01
-TP = 0.02
+TP = 0.03
 CUDA_NO = 0
 
 def train(env, num_timesteps, device):

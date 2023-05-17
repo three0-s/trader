@@ -210,7 +210,7 @@ def dqn_learning(env:CryptoMarketEnv,
             # backwards pass
             optimizer.zero_grad()
             loss.mean().backward()
-            torch.nn.utils.clip_grad_norm_(Q.parameters(), 100)
+            torch.nn.utils.clip_grad_norm_(Q.parameters(), 10)
             # update
             optimizer.step()
             num_param_updates += 1

@@ -96,9 +96,9 @@ class StateEmbedding(nn.Module):
         self.L = time_quantum
         self.D = out_features
         self.N = n_stock
-        self.norm = nn.BatchNorm2d(self.N)
+#         self.norm = nn.BatchNorm2d(self.N)
         self.pos = PositionalEncoding(in_features, self.L)
-        # self.norm = nn.LayerNorm([time_quantum, in_features])
+        self.norm = nn.LayerNorm([time_quantum, in_features])
         self.layer = nn.Linear(in_features=in_features, out_features=out_features, bias=True)
         self.relu = nn.LeakyReLU()
 
