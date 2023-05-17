@@ -271,6 +271,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[0] = (0, 0)
                 reward += self.get_net_profit_rate()
+            else:
+                reward -= 0.005/100
 
         elif action_type==SELL_L25X:
             # if (amount > self.CPS[1][1]):
@@ -286,6 +288,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[1] = (0, 0)
                 reward += self.get_net_profit_rate()
+            else:
+                reward -= 0.005/100
 
         elif action_type==SELL_L100X:
             amount = self.CPS[2][1]
@@ -300,6 +304,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[2] = (0, 0)
                 reward += self.get_net_profit_rate()
+            else:
+                reward -= 0.005/100
 
         elif action_type==SHORT10X:
             if self.account.withdraw(tot_price):
@@ -331,6 +337,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[3] = (0, 0)
                 reward += self.get_net_profit_rate()
+            else:
+                reward -= 0.005/100
 
         elif action_type==SELL_S25X:
             amount = self.CPS[4][1]
@@ -347,6 +355,8 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[4] = (0, 0)
                 reward += self.get_net_profit_rate()
+            else:
+                reward -= 0.005/100
 
         elif action_type==SELL_S100X:
             amount = self.CPS[5][1]
@@ -363,7 +373,9 @@ class CryptoMarketEnv(gym.Env):
                 else:
                     self.CPS[5] = (0, 0)
                 reward += self.get_net_profit_rate() 
-        
+            else:
+                reward -= 0.005/100
+                
         return reward
 
 
