@@ -12,7 +12,7 @@ LEARNING_FREQ = 4
 LEARNING_RATE = 1e-4
 
 DATA_DIR = "/mnt/won/trader/testdata"
-RENDER_DIR = "/mnt/won/render/"
+RENDER_DIR = "/mnt/won/render/47M"
 
 
 
@@ -25,15 +25,15 @@ N_STOCK=1
 NUM_HEADS=8
 NUM_LAYERS=8
 
-model_path = "/mnt/won/models/dueling_5300000_Sun_May_14_14:06:11_2023.model"
+model_path = "/mnt/won/models/dueling_4700000_Wed_May_17_14:14:34_2023.model"
 
 
 
 if __name__ == "__main__":
     env = CryptoMarketEnv(data_dir=DATA_DIR,
                         n_stock=14,
-                        SL=0.5,
-                        TP=0.003,
+                        SL=0.02,
+                        TP=0.04,
                         render_dir=RENDER_DIR, test=True)
     F = env.observation_space.shape[0]
     N = 1
@@ -65,7 +65,6 @@ if __name__ == "__main__":
             else:
                 s = torch.cat(list(obs_concat), dim=2).to(device)
                 action = Q(s).cpu().squeeze() #(16, )
-            
             obs, rewards, done, info = env.step(action)
             mean_rewards.append(rewards)
             if (done):
