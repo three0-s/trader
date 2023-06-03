@@ -6,3 +6,5 @@ envs/test_render/
 logs/
 tmp/ 
 models/
+*.png
+*.mp4

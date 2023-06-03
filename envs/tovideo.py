@@ -1,11 +1,13 @@
 import cv2 
 from glob import glob
+import os 
 
 pathIn= '/root/won/render/6/230514_ETH_processed/1684075483/*.png'
 pathOut = '/root/won/230514eth.mp4'
 fps = 5
 frame_array = []
-paths = sorted(glob(pathIn))
+paths = (glob(pathIn))
+paths=sorted(paths)
 for idx , path in enumerate(paths) : 
     if (idx % 2 == 0) | (idx % 5 == 0) :
         continue
