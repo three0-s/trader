@@ -23,16 +23,16 @@ LEARNING_STARTS = 50000
 EMB_DIM=256
 N_STOCK=1
 NUM_HEADS=8
-NUM_LAYERS=8
+NUM_LAYERS=6
 
-model_path = "/root/won/models/dueling_7200000_Wed_May_17_06:53:03_2023.model"
+model_path = "/root/won/logs/1684312930/models/dueling_22000000_Sun_May_21_16:22:26_2023.model"
 
 
 if __name__ == "__main__":
     env = CryptoMarketEnv(data_dir=DATA_DIR,
                         n_stock=14,
-                        SL=0.02,
-                        TP=0.04,
+                        SL=0.01,
+                        TP=0.02,
                         render_dir=RENDER_DIR, test=False)
 
     F = env.observation_space.shape[0]
@@ -69,9 +69,9 @@ if __name__ == "__main__":
             mean_rewards.append(rewards)
             if (done):
                 tot_reward = env.get_net_profit_rate()
-                env.render()
+#                 env.render()
                 break
-            env.render()
-    print(f"Total net profit rate: {tot_reward*100:.2f}%")
+#             env.render()
+    print(f"Total net profit rate: {tot_reward*100:.4f}%")
     # print(f"max rewards: {max(mean_rewards)*100:.2f}%")
     
